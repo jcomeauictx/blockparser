@@ -13,7 +13,6 @@ COPT =                          \
         -pg                     \
         -g0                     \
         -O6                     \
-        -m64                    \
         -Wall                   \
         -msse3                  \
         -Wextra                 \

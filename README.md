@@ -20,8 +20,8 @@ A fairly fast, quick and dirty bitcoin whole blockchain parser.
 - Turn your x86-64 Ubuntu box on
 - Make sure you have an up to date satoshi client blockchain in ~/.bitcoin
 - Run this:
-> sudo apt-get install libssl-dev build-essential g++-4.4 \
->  libboost-all-dev libsparsehash-dev git-core perl
+> sudo apt-get install libssl-dev build-essential g++-4.4 git-core perl
+> sudo apt-get install libboost-all-dev libsparsehash-dev
 > git clone git://github.com/jcomeauictx/blockparser.git
 > cd blockparser
 > make

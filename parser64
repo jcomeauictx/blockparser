@@ -1,0 +1,6 @@
+#!/bin/bash
+# plain-old Bourne shell doesn't have -a option to exec
+# runs the 64-bit binary on 32-bit system
+# correct LIBRARY_PATH for your system
+LD_LIBRARY_PATH=/opt/wheezy64/usr/lib/x86_64-linux-gnu \
+ exec ${0%%64} $@

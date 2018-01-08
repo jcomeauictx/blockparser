@@ -15,7 +15,7 @@ blockparser
     Why:
     ----
 
-        - Few dependencies: openssl-dev, boost, libparsehash-dev
+        - Few dependencies: openssl-dev, boost, libsparsehash-dev
 
         - Very quickly extract information from the entire blockchain.
 

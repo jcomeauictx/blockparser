@@ -88,10 +88,10 @@ A fairly fast, quick and dirty bitcoin whole blockchain parser.
   the existing callbacks in directory ./cb/ as a template to
   build your own:
 
--- cp cb/allBalances.cpp cb/myExtractor.cpp
--- Hack away
--- Recompile
--- Run
+    - cp cb/allBalances.cpp cb/myExtractor.cpp
+    - Hack away
+    - Recompile
+    - Run
 
 - You can also read the file callback.h (the base class from which
   you derive to implement your own new commands). It has been 

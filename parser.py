@@ -1,6 +1,10 @@
 #!/usr/bin/python3
 '''
 rewriting parser.cpp in Python3
+
+using ideas and code from http://www.righto.com/2014/02/
+ bitcoins-hard-way-using-raw-bitcoin.html,
+https://bitcoin.org/en/developer-guide, and many other sources.
 '''
 import sys, os, struct, binascii, logging
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)

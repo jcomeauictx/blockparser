@@ -1,21 +1,21 @@
-#blockparser
+# blockparser
 
-##Credits
+## Credits
 
 Written by znort987@yahoo.com
 If you find this useful: 1ZnortsoStC1zSTXbW6CUtkvqew8czMMG
 
-##What
+## What
 
 A fairly fast, quick and dirty bitcoin whole blockchain parser.
 
-##Why
+## Why
 
 - Few dependencies: openssl-dev, boost, libsparsehash-dev
 - Very quickly extract information from the entire blockchain.
 - Code is simple and helps to understand how the data structure underlying bitcoin works.
 
-##Build it
+## Build it
 
 - Turn your x86-64 Ubuntu box on
 - Make sure you have an up to date satoshi client blockchain in ~/.bitcoin
@@ -26,7 +26,7 @@ A fairly fast, quick and dirty bitcoin whole blockchain parser.
 > cd blockparser
 > make
 
-##Try it
+## Try it
 
 - Compute simple blockchain stats, full chain parse (< 1 second)
             ./parser simpleStats
@@ -45,7 +45,7 @@ A fairly fast, quick and dirty bitcoin whole blockchain parser.
 - See a greatly detailed dump of the pizza transaction
             ./parser show
 
-##Caveats
+## Caveats
 
 - You need an x86-84 Debian or Ubuntu box and a recent version of
   GCC(>=4.4), recent versions of boost and openssl-dev. The whole
@@ -61,7 +61,7 @@ A fairly fast, quick and dirty bitcoin whole blockchain parser.
   understand how the blockchain data structure works, the code 
   in parser.cpp is a solid way to start.
 
-##Hacking the code
+## Hacking the code
 
 - parser.cpp contains a generic parser that mmaps the blockchain, 
   parses it and calls "user-defined" callbacks as it hits interesting
@@ -103,6 +103,6 @@ A fairly fast, quick and dirty bitcoin whole blockchain parser.
   DENSE, undef it). Sparse hash maps are slower but save quite a
   bit of RAM.
 
-##License
+## License
 
 Code is in the public domain.

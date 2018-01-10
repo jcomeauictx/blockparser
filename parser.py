@@ -40,11 +40,15 @@ def parse(blockfile=DEFAULT_BLOCK, minblock=0, maxblock=sys.maxsize):
     with open(blockfile, 'rb') as datainput:
         blockdata = datainput.read()  # not necessarily very efficient
     logging.warn('NOTE: "height" values shown are relative to START OF FILE')
+    logging.warn('NOTE: for AmericanCoin, heights shown are 112639 blocks'
+                 ' higher than what is reported in debug.log; for example,'
+                 ' to view block 291964 as shown in debug.log, request'
+                 ' instead block 404603.')
     height = 0
     while index < len(blockdata):
         logging.debug('blockparser at index %d out of %d bytes',
                       index, len(blockdata))
-        logging.info('height: %d', height)
+        logging.debug('height: %d', height)
         magic = blockdata[index:index + 4]
         blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
         blockheader = blockdata[index + 8:index + 88]

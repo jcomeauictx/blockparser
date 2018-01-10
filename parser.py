@@ -69,8 +69,8 @@ def parse_blockheader(blockheader):
     return contents of block header
     '''
     version = struct.unpack('<L', blockheader[:4])[0]
-    previous_blockhash = blockheader[36:3:-1]
-    merkle_root = blockheader[68:35:-1]
+    previous_blockhash = blockheader[4:36]
+    merkle_root = blockheader[36:68]
     unix_time = datetime.utcfromtimestamp(
         struct.unpack('<L', blockheader[68:72])[0])
     target_nbits = blockheader[72:76]
@@ -78,12 +78,25 @@ def parse_blockheader(blockheader):
     if len(nonce) != 4:
         raise ValueError('Nonce wrong size: %d bytes' % len(nonce))
     logging.info('block version: %d', version)
-    logging.info('previous block hash: %s', previous_blockhash)
-    logging.info('merkle root: %s', merkle_root)
+    logging.info('previous block hash: %s', showhash(previous_blockhash))
+    logging.info('merkle root: %s', showhash(merkle_root))
     logging.info('unix time: %s', unix_time)
-    logging.info('target_nbits: %r', target_nbits)
-    logging.info('nonce: %s', binascii.b2a_hex(nonce))
+    logging.info('target_nbits: %r', to_hex(target_nbits))
+    logging.info('nonce: %s', to_hex(nonce))
     return version, previous_blockhash, merkle_root, target_nbits, nonce
+
+def to_hex(bytestring):
+    '''
+    for displaying bytes in hexadecimal
+    '''
+    return binascii.b2a_hex(bytestring)
+
+def showhash(bytestring):
+    '''
+    return a sha256 hash, or any other bytestring, reversed and hexlified
+    '''
+    return to_hex(bytestring[::-1])
+
 
 def parse_transactions(data):
     '''

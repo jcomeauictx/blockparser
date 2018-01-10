@@ -144,7 +144,7 @@ def parse_output(data):
     '''
     value = struct.unpack('<Q', data[:8])[0]
     logging.info('txout value: %.8f', value / 100000000)
-    script_length, data = get_count(data)
+    script_length, data = get_count(data[8:])
     script, data = data[:script_length], data[script_length:]
     logging.info('txout script: %s', script)
     return (value, script), data

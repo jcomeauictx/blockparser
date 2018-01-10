@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3 -OO
 '''
 rewriting parser.cpp in Python3
 
@@ -37,9 +37,12 @@ def parse(blockfile=DEFAULT_BLOCK):
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
     with open(blockfile, 'rb') as datainput:
         blockdata = datainput.read()  # not necessarily very efficient
+    logging.warn('NOTE: "height" values shown are relative to START OF FILE')
+    height = 0
     while index < len(blockdata):
         logging.debug('blockparser at index %d out of %d bytes',
                       index, len(blockdata))
+        logging.info('height: %d', height)
         magic = blockdata[index:index + 4]
         blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
         blockheader = blockdata[index + 8:index + 88]
@@ -54,6 +57,7 @@ def parse(blockfile=DEFAULT_BLOCK):
         count, transactions = parse_transactions(transactions)
         logging.info('transaction count: %d', count)
         logging.debug('transaction data (partial): %r', transactions[:80])
+        height += 1
 
 def parse_blockheader(blockheader):
     '''

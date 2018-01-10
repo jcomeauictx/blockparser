@@ -22,9 +22,10 @@ MAGIC = {
 }
 VARINT = {
     # struct format, offset, length
-    '\xfd': ('<H', 1, 2),
-    '\xfe': ('<L', 1, 4),
-    '\xff': ('<Q', 1, 8),
+    # remember in Python3 b'\xfd'[0] == 253
+    0xfd: ('<H', 1, 2),
+    0xfe: ('<L', 1, 4),
+    0xff: ('<Q', 1, 8),
 }
 
 def parse(blockfile=DEFAULT_BLOCK):
@@ -37,6 +38,8 @@ def parse(blockfile=DEFAULT_BLOCK):
     with open(blockfile, 'rb') as datainput:
         blockdata = datainput.read()  # not necessarily very efficient
     while index < len(blockdata):
+        logging.debug('blockparser at index %d out of %d bytes',
+                      index, len(blockdata))
         magic = blockdata[index:index + 4]
         blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
         blockheader = blockdata[index + 8:index + 88]
@@ -150,8 +153,12 @@ def parse_output(data):
     return (value, script), data
 
 def get_count(data):
-    '''
+    r'''
     extract and decode VarInt count and return it with remainder of data
+
+    # the following failed (got 253) before VARINT dict was corrected
+    >>> get_count(b'\xfd@\x01\x04\xe3v@\x05\x99')[0]
+    320
     '''
     logging.debug('get_count: next 9 data bytes: %s', data[:9])
     packing, offset, length = VARINT.get(data[0], ('B', 0, 1))

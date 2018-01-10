@@ -28,12 +28,14 @@ VARINT = {
     0xff: ('<Q', 1, 8),
 }
 
-def parse(blockfile=DEFAULT_BLOCK):
+def parse(blockfile=DEFAULT_BLOCK, minblock=0, maxblock=sys.maxsize):
     '''
     dump out a block file
     '''
     index = 0
     magic = ''
+    minheight, maxheight = int(minblock), int(maxblock)
+    logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
     with open(blockfile, 'rb') as datainput:
         blockdata = datainput.read()  # not necessarily very efficient
@@ -48,15 +50,18 @@ def parse(blockfile=DEFAULT_BLOCK):
         blockheader = blockdata[index + 8:index + 88]
         transactions = blockdata[index + 88:index + blocksize - 8]
         index += blocksize + 8
-        logging.debug('magic: %s', binascii.b2a_hex(magic))
-        logging.info('block type: %s', reversemagic.get(magic, 'unknown'))
-        logging.info('block size: %d', blocksize)
-        logging.info('block header: %r', blockheader)
-        parse_blockheader(blockheader)
-        logging.info('transactions (partial): %r', transactions[:80])
-        count, transactions = parse_transactions(transactions)
-        logging.info('transaction count: %d', count)
-        logging.debug('transaction data (partial): %r', transactions[:80])
+        if minheight <= height <= maxheight:
+            logging.debug('magic: %s', binascii.b2a_hex(magic))
+            logging.info('block type: %s', reversemagic.get(magic, 'unknown'))
+            logging.info('block size: %d', blocksize)
+            logging.info('block header: %r', blockheader)
+            parse_blockheader(blockheader)
+            logging.info('transactions (partial): %r', transactions[:80])
+            count, transactions = parse_transactions(transactions)
+            logging.info('transaction count: %d', count)
+            logging.debug('transaction data (partial): %r', transactions[:80])
+        elif height > maxheight:
+            break
         height += 1
 
 def parse_blockheader(blockheader):
@@ -66,7 +71,7 @@ def parse_blockheader(blockheader):
     version = struct.unpack('<L', blockheader[:4])[0]
     previous_blockhash = blockheader[36:3:-1]
     merkle_root = blockheader[68:35:-1]
-    unix_time = datetime.fromtimestamp(
+    unix_time = datetime.utcfromtimestamp(
         struct.unpack('<L', blockheader[68:72])[0])
     target_nbits = blockheader[72:76]
     nonce = blockheader[76:]

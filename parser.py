@@ -90,7 +90,7 @@ def parse_transaction(data):
     '''
     version = struct.unpack('<L', data[:4])[0]
     logging.info('transaction version: %d', version)
-    in_count, data = get_count(data)
+    in_count, data = get_count(data[4:])
     logging.info('number of transaction inputs: %d', in_count)
     inputs, data = parse_inputs(in_count, data)
     out_count, data = get_count(data)
@@ -118,7 +118,7 @@ def parse_outputs(count, data):
     outputs = []
     for index in range(count):
         tx_output, data = parse_output(data)
-        inputs.append(tx_output)
+        outputs.append(tx_output)
     return outputs, data
 
 def parse_input(data):
@@ -129,14 +129,14 @@ def parse_input(data):
     previous_hash = data[:32]
     logging.info('txin previous txout hash: %s', previous_hash)
     previous_index = struct.unpack('<L', data[32:36])[0]
-    logging.info('txin previous txout index: %d', previous_index)
+    logging.info('txin previous txout index: 0x%08x', previous_index)
     script_length, data = get_count(data[36:])
     logging.debug('script_length: %d', script_length)
     script, data = data[:script_length], data[script_length:]
     logging.info('txin script: %s', script)
     sequence_number = struct.unpack('<L', data[:4])[0]
     logging.info('txin sequence number: 0x%08x', sequence_number)
-    return (previous_hash, previous_index, script, sequence_number), data
+    return (previous_hash, previous_index, script, sequence_number), data[4:]
 
 def parse_output(data):
     '''

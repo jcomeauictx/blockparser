@@ -2,8 +2,9 @@
 '''
 rewriting parser.cpp in Python3
 
-using ideas and code from http://www.righto.com/2014/02/
- bitcoins-hard-way-using-raw-bitcoin.html,
+using ideas and code from
+http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html,
+http://www.righto.com/2014/02/bitcoin-mining-hard-way-algorithms.html,
 https://bitcoin.org/en/developer-guide,
 https://bitcoin.org/en/developer-reference,
 and many other sources.
@@ -27,6 +28,13 @@ VARINT = {
     0xfe: ('<L', 1, 4),
     0xff: ('<Q', 1, 8),
 }
+UNPACKER = {
+    # fetch using len(bytestring)
+    1: 'B',
+    2: '<H',
+    4: '<L',
+    8: '<Q',
+}
 SCRIPT_OPS = tuple(
     (n, ('(PUSH(%d))' % n,
     'stack.push(bytes(script[:%d])); script[:%d]=[]' % (n, n)))
@@ -46,13 +54,15 @@ def parse(blockfile=DEFAULT_BLOCK, minblock=0, maxblock=sys.maxsize):
     minheight, maxheight = int(minblock), int(maxblock)
     logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
-    with open(blockfile, 'rb') as datainput:
+    with open(blockfile or DEFAULT_BLOCK, 'rb') as datainput:
         blockdata = datainput.read()  # not necessarily very efficient
     logging.warning('NOTE: "height" values shown are relative to START OF FILE')
-    logging.warning('NOTE: for AmericanCoin, heights shown are 112638 blocks'
-                 ' higher than what is reported in debug.log; for example,'
-                 ' to view block 291965 as shown in debug.log, request'
-                 ' instead block 404603.')
+    logging.warning('NOTE: heights shown can be many blocks higher than what'
+                    ' is reported in debug.log; for example, to view AMC'
+                    ' block 291965 as shown in debug.log, instead request'
+                    ' block 404603. this number varies node by node,'
+                    ' as older nodes will have stale blocks embedded in the'
+                    ' data files.')
     height = 0
     while index < len(blockdata):
         logging.debug('blockparser at index %d out of %d bytes',
@@ -83,29 +93,41 @@ def parse_blockheader(blockheader):
     '''
     return contents of block header
     '''
-    version = struct.unpack('<L', blockheader[:4])[0]
+    version = blockheader[:4]
     previous_blockhash = blockheader[4:36]
     merkle_root = blockheader[36:68]
-    unix_time = datetime.utcfromtimestamp(
-        struct.unpack('<L', blockheader[68:72])[0])
+    unix_time = blockheader[68:72]
     target_nbits = blockheader[72:76]
     nonce = blockheader[76:]
     if len(nonce) != 4:
         raise ValueError('Nonce wrong size: %d bytes' % len(nonce))
-    logging.info('block version: %d', version)
+    logging.info('block version: %s', show_long(version))
     logging.info('previous block hash: %s', show_hash(previous_blockhash))
     logging.info('merkle root: %s', show_hash(merkle_root))
-    logging.info('unix time: %s', unix_time)
+    logging.info('unix time: %s', timestamp(unix_time))
     logging.info('target_nbits: %r', to_hex(target_nbits))
     logging.info('nonce: %s', to_hex(nonce))
+    logging.info('block hash: %s', show_hash(get_hash(blockheader)))
     return version, previous_blockhash, merkle_root, target_nbits, nonce
 
 def to_long(bytestring):
     '''
-    for unpacking and displaying 32-bit number
+    for unpacking 8, 16, 32, or 64-bit number
     '''
-    number = struct.unpack('<L', bytestring)[0]
+    return struct.unpack(UNPACKER[(len(bytestring))], bytestring)[0]
+
+def show_long(bytestring):
+    '''
+    for displaying 32-bit number
+    '''
+    number = to_long(bytestring)
     return '0x%08x (%d)' % (number, number)
+
+def timestamp(bytestring):
+    '''
+    for displaying 32-bit number as UTC time
+    '''
+    return datetime.utcfromtimestamp(to_long(bytestring)).isoformat()
 
 def to_hex(bytestring):
     '''
@@ -146,7 +168,7 @@ def parse_transaction(data):
     '''
     version = data[:4]
     raw_transaction = version
-    logging.info('transaction version: %s', to_long(version))
+    logging.info('transaction version: %s', show_long(version))
     raw_in_count, in_count, data = get_count(data[4:])
     logging.info('number of transaction inputs: %d', in_count)
     inputs, data = parse_inputs(in_count, data)
@@ -194,7 +216,7 @@ def parse_input(data):
     logging.info('txin previous txout hash: %s', show_hash(previous_hash))
     previous_index = data[32:36]
     raw_input = data[:36]
-    logging.info('txin previous txout index: %s', to_long(previous_index))
+    logging.info('txin previous txout index: %s', show_long(previous_index))
     raw_length, script_length, data = get_count(data[36:])
     raw_input += raw_length
     logging.debug('script_length: %d', script_length)
@@ -202,7 +224,7 @@ def parse_input(data):
     raw_input += script
     logging.info('txin script: %s', script)
     sequence_number = data[:4]
-    logging.info('txin sequence number: %s', to_long(sequence_number))
+    logging.info('txin sequence number: %s', show_long(sequence_number))
     raw_input += sequence_number
     return raw_input, data[4:]
 
@@ -210,8 +232,8 @@ def parse_output(data):
     '''
     parse and return a single transaction output
     '''
-    value = struct.unpack('<Q', data[:8])[0]
     raw_output = data[:8]
+    value = to_long(raw_output)
     logging.info('txout value: %.8f', value / 100000000)
     raw_length, script_length, data = get_count(data[8:])
     script, data = data[:script_length], data[script_length:]

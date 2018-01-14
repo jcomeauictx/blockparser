@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 SCRIPT_OPS = tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (n,
         ['stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
-         'stack.append(bytes([script.pop(0) for i in range(opcode)])'])
+         'stack.append(bytes([script.pop(0) for i in range(opcode)]))'])
     for n in range(0x01, 0x4c)
 )
 SCRIPT_OPS += (
@@ -54,7 +54,7 @@ def display(scriptbinary):
             if __debug__:
                 exec("print(locals())")
             logging.debug('`exec`ing operation 0x%x, %s', opcode, display_op)
-            exec('print(script); ' + display_op)
+            exec('print(script); ' + display_op, {**globals(), **locals()})
     while stack:
         print(stack.pop(0))
 
@@ -77,7 +77,7 @@ def run(scriptbinary):
         else:
             opstack.append(operation[1])
     while opstack:
-        exec(opstack.pop(0))
+        exec(opstack.pop(0), {**globals(), **locals()})
         logging.info('stack: %s', stack)
 
 if __name__ == '__main__':

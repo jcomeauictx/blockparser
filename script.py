@@ -74,15 +74,16 @@ def run(scriptbinary):
         opcode = script.pop(0)
         operation = opcodes.get(opcode, None)
         if operation is None:
-            opstack.append("raise(NotImplementedError("
-                           "'unrecognized opcode 0x%x')" % opcode)
+            raise NotImplementedError('unrecognized opcode 0x%x' % opcode)
         else:
-            opstack.append(operation[1])
-    while opstack:
-        exec(opstack.pop(0), {**globals(), **locals()})
+            run_op = operation[1]
+            logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
+            exec(run_op, {**globals(), **locals()})
         logging.info('stack: %s', stack)
 
 if __name__ == '__main__':
-    SCRIPT = binascii.a2b_hex(sys.argv[1]) if len(sys.argv) > 1 else TESTSCRIPT
+    SCRIPT = a2b_hex(sys.argv[1]) if len(sys.argv) > 1 else TESTSCRIPT
+    logging.debug('Displaying script %s...', b2a_hex(SCRIPT))
     display(SCRIPT)
+    logging.debug('Running script...')
     run(SCRIPT)

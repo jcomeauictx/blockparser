@@ -18,20 +18,45 @@ SCRIPT_OPS = tuple(  # 0x01 through 0x4b are all implied PUSH operations
 )
 SCRIPT_OPS += (
     (0x00, [
-        "stack.append('OP_FALSE')",
+        "stack.append('FALSE')",
         'stack.append(0)']
     ),
     (0x4c, [
-        "stack.append('OP_PUSHDATA1')",
         ('count = script.pop(0);'
-         'stack.append(bytes[script.pop(0) for i in range(count)])')],
+         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
+        ('count = script.pop(0);'
+         'stack.append(bytes([script.pop(0) for i in range(count)]))')],
+    ),
+    (0x4d, [
+        ("count = struct.unpack('<H', bytes("
+         '[script.pop(0) for i in range(2)]));'
+         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
+        ("count = struct.unpack('<H', bytes("
+         '[script.pop(0) for i in range(2)]));'
+         'stack.append(bytes([script.pop(0) for i in range(count)]))')],
+    ),
+    (0x4e, [
+        ("count = struct.unpack('<L', bytes("
+         '[script.pop(0) for i in range(4)]));'
+         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
+        ("count = struct.unpack('<L', bytes("
+         '[script.pop(0) for i in range(4)]));'
+         'stack.append(bytes([script.pop(0) for i in range(count)]))')],
+    ),
+    (0x4f, [
+        "stack.append(-1)",
+        'stack.append(-1)'],
+    ),
+    (0x50, [
+        "stack.append('RESERVED')",
+        "raise NotImplementedError('reserved opcode 0x50')"],
     ),
     (0x76, [
-        "stack.append('OP_DUP')",
+        "stack.append('DUP')",
         'stack.append(stack[-1])'],
     ),
     (0xac, [
-        "stack.append('OP_CHECKSIG')",
+        "stack.append('CHECKSIG')",
         'stack.pop(-1); stack[-1] = 1'],  # FIXME: simulating success for now
     ),
 )
@@ -87,6 +112,8 @@ def run(scripts):
                 logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
                 exec(run_op, {**globals(), **locals()})
             logging.info('stack: %s', stack)
+    result = bool(stack.pop(-1))
+    logging.debug('script result: %s', ['fail', 'pass'][result])
 
 if __name__ == '__main__':
     SCRIPTS = list(map(a2b_hex, sys.argv[1:])) if sys.argv[1:] else TESTSCRIPTS

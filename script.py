@@ -18,17 +18,21 @@ SCRIPT_OPS = tuple(  # 0x01 through 0x4b are all implied PUSH operations
 )
 SCRIPT_OPS += (
     (0x00, [
-        'OP_FALSE',
+        "stack.append('OP_FALSE')",
         'stack.append(0)']
     ),
     (0x4c, [
-        'OP_PUSHDATA1',
+        "stack.append('OP_PUSHDATA1')",
         ('count = script.pop(0);'
          'stack.append(bytes[script.pop(0) for i in range(count)])')],
     ),
     (0x76, [
-        'OP_DUP',
+        "stack.append('OP_DUP')",
         'stack.append(stack[-1])'],
+    ),
+    (0xac, [
+        "stack.append('OP_CHECKSIG')",
+        'stack.pop(-1); stack[-1] = 1'],  # FIXME: simulating success for now
     ),
 )
 TESTSCRIPT = (  # from Satoshi's genesis block coinbase output

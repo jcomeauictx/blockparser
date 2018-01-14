@@ -51,10 +51,8 @@ def display(scriptbinary):
             stack.append(hex(opcode) + "(not yet implemented)")
         else:
             display_op = operation[0]
-            if __debug__:
-                exec("print(locals())")
             logging.debug('`exec`ing operation 0x%x, %s', opcode, display_op)
-            exec('print(script); ' + display_op, {**globals(), **locals()})
+            exec(display_op, {**globals(), **locals()})
     while stack:
         print(stack.pop(0))
 

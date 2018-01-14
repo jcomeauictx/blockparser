@@ -2,23 +2,34 @@
 '''
 display and execute bitcoin stack scripts
 '''
-import sys, os, struct, binascii, logging
+import sys, os, struct, logging
+from binascii import b2a_hex, a2b_hex
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # each item in SCRIPT_OPS gives:
 #  its numeric value in hexadecimal;
 #  its "representation", most readable way to display the script;
 #  the Python code to be `exec`d in the context of the `run` routine
-SCRIPT_OPS = tuple(
+SCRIPT_OPS = tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (n,
-        ('stack.push(binascii.b2a_hex(bytes([script.pop(0)'
-            ' for i in range(opcode)])))'),
-         'stack.push(bytes(script[:%d])); script[:%d]=[]' % (n, n))
-    for n in range(0x01, 0x4c))
+        ['stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
+         'stack.append(bytes([script.pop(0) for i in range(opcode)])'])
+    for n in range(0x01, 0x4c)
+)
 SCRIPT_OPS += (
-    (0x00, ('OP_FALSE', 'stack.push(0)')),
-    (0x4c, ('OP_PUSHDATA1', 'stack.push(program.eat(1))')),
-    (0x76, ('OP_DUP', 'stack.push(stack[-1])')),
+    (0x00, [
+        'OP_FALSE',
+        'stack.append(0)']
+    ),
+    (0x4c, [
+        'OP_PUSHDATA1',
+        ('count = script.pop(0);'
+         'stack.append(bytes[script.pop(0) for i in range(count)])')],
+    ),
+    (0x76, [
+        'OP_DUP',
+        'stack.append(stack[-1])'],
+    ),
 )
 TESTSCRIPT = (  # from Satoshi's genesis block coinbase output
         b"A\x04g\x8a\xfd\xb0\xfeUH'\x19g\xf1\xa6q0\xb7\x10\\\xd6\xa8"
@@ -32,14 +43,16 @@ def display(scriptbinary):
     '''
     stack = []
     opcodes = dict(SCRIPT_OPS)
-    script = list(script)  # gives list of numbers (`ord`s)
+    script = list(scriptbinary)  # gives list of numbers (`ord`s)
     while script:
         opcode = script.pop(0)
         operation = opcodes.get(opcode, None)
         if operation is None:
             stack.append(hex(opcode) + "(not yet implemented)")
         else:
-            exec(operation[0])
+            display_op = operation[0]
+            logging.debug('`exec`ing operation 0x%x, %s', opcode, display_op)
+            exec(display_op)
     while stack:
         print(stack.pop(0))
 
@@ -52,7 +65,7 @@ def run(scriptbinary):
     stack = []
     opstack = []
     opcodes = dict(SCRIPT_OPS)
-    script = list(script)  # gives list of numbers (`ord`s)
+    script = list(scriptbinary)  # gives list of numbers (`ord`s)
     while script:
         opcode = script.pop(0)
         operation = opcodes.get(opcode, None)

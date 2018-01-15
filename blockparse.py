@@ -12,8 +12,9 @@ and many other sources.
 from __future__ import division, print_function
 import sys, os, struct, binascii, logging, hashlib
 from datetime import datetime
+from glob import glob
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
-DEFAULT_BLOCK = os.path.expanduser('~/.bitcoin/blocks/blk00000.dat')
+DEFAULT = sorted(glob(os.path.expanduser('~/.bitcoin/blocks/blk*.dat')))
 MAGIC = {
     'bitcoin': binascii.a2b_hex('F9BEB4D9'),
     'dogecoin': binascii.a2b_hex('C0C0C0C0'),
@@ -40,49 +41,48 @@ UNPACKER = {
     8: '<Q',
 }
 
-def parse(blockfile=DEFAULT_BLOCK, minblock=0, maxblock=sys.maxsize):
+def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
-    dump out a block file
+    dump out block files
     '''
     index = 0
     magic = ''
     minheight, maxheight = int(minblock), int(maxblock)
     logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
-    reversemagic = dict([[value, key] for key, value in MAGIC.items()])
-    with open(blockfile or DEFAULT_BLOCK, 'rb') as datainput:
-        blockdata = datainput.read()  # not necessarily very efficient
-    logging.warning('NOTE: "height" values shown are relative to START OF FILE')
-    logging.warning('NOTE: heights shown can be many blocks higher than what'
-                    ' is reported in debug.log; for example, to view AMC'
-                    ' block 291965 as shown in debug.log, instead request'
-                    ' block 404603. this number varies node by node,'
-                    ' as older nodes will have stale blocks embedded in the'
-                    ' data files.')
     height = 0
-    while index < len(blockdata):
-        logging.debug('blockparser at index %d out of %d bytes',
-                      index, len(blockdata))
-        magic = blockdata[index:index + 4]
-        blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
-        blockheader = blockdata[index + 8:index + 88]
-        transactions = blockdata[index + 88:index + blocksize + 8]
-        index += blocksize + 8
-        if minheight <= height <= maxheight:
-            logging.info('height: %d', height)
-            logging.debug('magic: %s', binascii.b2a_hex(magic))
-            logging.info('block type: %s', reversemagic.get(magic, 'unknown'))
-            logging.info('block size: %d', blocksize)
-            logging.info('block header: %r', blockheader)
-            parse_blockheader(blockheader)
-            logging.info('transactions (partial): %r', transactions[:80])
-            count, transactions = parse_transactions(transactions)
-            logging.info('transaction count: %d', count)
-            logging.debug('transaction data (partial): %r', transactions[:80])
-        elif height > maxheight:
-            break
-        else:
-            logging.debug('height: %d', height)
-        height += 1
+    reversemagic = dict([[value, key] for key, value in MAGIC.items()])
+    for blockfile in blockfiles or DEFAULT:
+        with open(blockfile, 'rb') as datainput:
+            blockdata = datainput.read()  # not necessarily very efficient
+        logging.warning('NOTE: "height" values shown are relative'
+                        ' to start of first file and may include'
+                        ' orphaned blocks')
+        while index < len(blockdata):
+            logging.debug('blockparser at index %d out of %d bytes',
+                          index, len(blockdata))
+            magic = blockdata[index:index + 4]
+            blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
+            blockheader = blockdata[index + 8:index + 88]
+            transactions = blockdata[index + 88:index + blocksize + 8]
+            index += blocksize + 8
+            if minheight <= height <= maxheight:
+                logging.info('height: %d', height)
+                logging.debug('magic: %s', binascii.b2a_hex(magic))
+                logging.info('block type: %s', reversemagic.get(
+                             magic, 'unknown'))
+                logging.info('block size: %d', blocksize)
+                logging.info('block header: %r', blockheader)
+                parse_blockheader(blockheader)
+                logging.info('transactions (partial): %r', transactions[:80])
+                count, transactions = parse_transactions(transactions)
+                logging.info('transaction count: %d', count)
+                logging.debug('transaction data (partial): %r',
+                              transactions[:80])
+            elif height > maxheight:
+                break
+            else:
+                logging.debug('height: %d', height)
+            height += 1
 
 def parse_blockheader(blockheader):
     '''
@@ -269,4 +269,4 @@ def get_count(data):
     return raw_count, count, data
 
 if __name__ == '__main__':
-    parse(*sys.argv[1:])
+    parse((sys.argv + [None])[1], *sys.argv[2:])

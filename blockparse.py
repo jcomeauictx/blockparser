@@ -234,6 +234,9 @@ def parse_output(data):
     raw_output = raw_amount = data[:8]
     value = to_long(raw_amount)
     logging.info('txout value: %.8f', value / 100000000)
+    # script probably broken if amount is very high
+    if __debug__ and value > 100000000000000:
+        raise ValueError('Unusual value, is script broken?')
     raw_length, script_length, data = get_count(data[8:])
     script, data = data[:script_length], data[script_length:]
     logging.info('txout script: %r', script)

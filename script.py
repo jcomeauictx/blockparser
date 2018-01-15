@@ -78,27 +78,42 @@ SCRIPT_OPS += (
         'stack.pop(-1); stack[-1] = 1'],  # FIXME: simulating success for now
     ),
 )
-TESTSCRIPTS = (  # from Satoshi's genesis block
-    b'\x04\xff\xff\x00\x1d'
-    b'\x01\x04EThe Times 03/Jan/2009 Chancellor on'
-    b' brink of second bailout for banks',
-
-    b"A\x04g\x8a\xfd\xb0\xfeUH'\x19g\xf1\xa6q0\xb7\x10\\\xd6\xa8"
-    b"(\xe09\t\xa6yb\xe0\xea\x1fa\xde\xb6I\xf6\xbc?L\xef8\xc4\xf3"
-    b"U\x04\xe5\x1e\xc1\x12\xde\\8M\xf7\xba\x0b\x8dW\x8aLp+k\xf1\x1d_\xac"
+TESTSCRIPTS = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
+    [b'\x01\x00\x00\x00', b'\x01', [  # inputs
+        [b'\xc9\x97\xa5\xe5n\x10A\x02\xfa \x9cj\x85-\xd9\x06`\xa2\x0b-\x9c5$#'
+         b'\xed\xce%\x85\x7f\xcd7\x04', b'\x00\x00\x00\x00', b'H',
+         b'G0D\x02 NE\xe1i2\xb8\xafQIa\xa1\xd3\xa1\xa2_\xdf?Ow2\xe9\xd6$\xc6'
+         b'\xc6\x15H\xab_\xb8\xcdA\x02 \x18\x15"\xec\x8e\xca\x07\xdeH`\xa4\xac'
+         b'\xdd\x12\x90\x9d\x83\x1c\xc5l\xbb\xacF"\x08"!\xa8v\x8d\x1d\t\x01',
+         b'\xff\xff\xff\xff']
+        ], b'\x02', [  # outputs
+        [b'\x00\xca\x9a;\x00\x00\x00\x00', b'C',
+         b'A\x04\xae\x1ab\xfe\t\xc5\xf5\x1b\x13\x90_\x07\xf0k\x99\xa2\xf7\x15'
+         b'\x9b"%\xf3t\xcd7\x8dq0/\xa2\x84\x14\xe7\xaa\xb3s\x97\xf5T\xa7\xdf_'
+         b'\x14,!\xc1\xb70;\x8a\x06&\xf1\xba\xde\xd5\xc7*pO~l\xd8L\xac'],
+        [b'\x00(k\xee\x00\x00\x00\x00', b'C',
+         b'A\x04\x11\xdb\x93\xe1\xdc\xdb\x8a\x01kI\x84\x0f\x8cS\xbc\x1e\xb6'
+         b'\x8a8.\x97\xb1H.\xca\xd7\xb1H\xa6\x90\x9a\\\xb2\xe0\xea\xdd\xfb'
+         b'\x84\xcc\xf9tDd\xf8.\x16\x0b\xfa\x9b\x8bd\xf9\xd4\xc0?\x99\x9b\x86C'
+         b'\xf6V\xb4\x12\xa3\xac']
+        ], b'\x00\x00\x00\x00'
+    ]
 )
 
-def display(scripts):
+def display(transaction):
     '''
     breaks down binary script into something readable (to a FORTHer)
     '''
     stack = []
     opcodes = dict(SCRIPT_OPS)
+    scripts = [inputscript[-2] for inputscript in transaction[-4]]
+    scripts += [outputscript[-1] for outputscript in transaction[-2]]
     for scriptbinary in scripts:
         script = list(scriptbinary)  # gives list of numbers (`ord`s)
         while script:
             opcode = script.pop(0)
             operation = opcodes.get(opcode, None)
+            logging.debug('opcode: %r, operation: %r', opcode, operation)
             if operation is None:
                 stack.append(hex(opcode) + "(not yet implemented)")
             else:
@@ -109,7 +124,7 @@ def display(scripts):
             print(stack.pop(0))
         print('-----')
 
-def run(scripts):
+def run(transaction):
     '''
     executes script the same way (hopefully) as Bitcoin Core would
 
@@ -118,6 +133,8 @@ def run(scripts):
     stack = []
     opstack = []
     opcodes = dict(SCRIPT_OPS)
+    scripts = [inputscript[-2] for inputscript in transaction[-4]]
+    scripts += [outputscript[-1] for outputscript in transaction[-2]]
     for scriptbinary in scripts:
         script = list(scriptbinary)  # gives list of numbers (`ord`s)
         while script:
@@ -134,8 +151,8 @@ def run(scripts):
     logging.debug('script result: %s', ['fail', 'pass'][result])
 
 if __name__ == '__main__':
-    SCRIPTS = list(map(a2b_hex, sys.argv[1:])) if sys.argv[1:] else TESTSCRIPTS
-    logging.debug('Displaying scripts %s...', sys.argv[1:] or TESTSCRIPTS)
-    display(SCRIPTS)
+    SCRIPTS = TESTSCRIPTS
+    logging.debug('Displaying scripts %s...', TESTSCRIPTS)
+    display(TESTSCRIPTS)
     logging.debug('Running scripts...')
-    run(SCRIPTS)
+    run(TESTSCRIPTS)

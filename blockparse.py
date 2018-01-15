@@ -162,14 +162,14 @@ def parse_transaction(data):
     logging.info('transaction version: %s', show_long(version))
     raw_in_count, in_count, data = get_count(data[4:])
     logging.info('number of transaction inputs: %d', in_count)
-    inputs, data = parse_inputs(in_count, data)
+    raw_inputs, inputs, data = parse_inputs(in_count, data)
     logging.debug('length of data after parse_inputs: %d', len(data))
     raw_out_count, out_count, data = get_count(data)
     logging.info('number of transaction outputs: %d', out_count)
-    outputs, data = parse_outputs(out_count, data)
+    raw_outputs, outputs, data = parse_outputs(out_count, data)
     logging.debug('length of data after parse_outputs: %d', len(data))
-    raw_transaction += (raw_in_count + b''.join(inputs) +
-        raw_out_count + b''.join(outputs))
+    raw_transaction += (raw_in_count + b''.join(raw_inputs) +
+        raw_out_count + b''.join(raw_outputs))
     lock_time, data = data[:4], data[4:]
     raw_transaction += lock_time
     logging.info('lock time: %s', to_hex(lock_time))
@@ -184,22 +184,26 @@ def parse_inputs(count, data):
     '''
     return transaction inputs
     '''
+    raw_inputs = []
     inputs = []
     for index in range(count):
         logging.debug('parse_inputs: len(data): %d', len(data))
-        tx_input, data = parse_input(data)
-        inputs.append(tx_input)
-    return inputs, data
+        tx_input, input_split, data = parse_input(data)
+        raw_inputs.append(tx_input)
+        inputs.append(input_split)
+    return raw_inputs, inputs, data
 
 def parse_outputs(count, data):
     '''
     return transaction outputs
     '''
+    raw_outputs = []
     outputs = []
     for index in range(count):
-        tx_output, data = parse_output(data)
-        outputs.append(tx_output)
-    return outputs, data
+        tx_output, output_split, data = parse_output(data)
+        raw_outputs.append(tx_output)
+        outputs.append(output_split)
+    return raw_outputs, outputs, data
 
 def parse_input(data):
     '''
@@ -217,23 +221,25 @@ def parse_input(data):
     script, data = data[:script_length], data[script_length:]
     raw_input += script
     logging.info('txin script: %r', script)
-    sequence_number = data[:4]
-    logging.info('txin sequence number: %s', show_long(sequence_number))
-    raw_input += sequence_number
-    return raw_input, data[4:]
+    sequence = data[:4]
+    logging.info('txin sequence number: %s', show_long(sequence))
+    raw_input += sequence
+    split_input = [previous_hash, previous_index, raw_length, script, sequence]
+    return raw_input, split_input, data[4:]
 
 def parse_output(data):
     '''
     parse and return a single transaction output
     '''
-    raw_output = data[:8]
-    value = to_long(raw_output)
+    raw_output = raw_amount = data[:8]
+    value = to_long(raw_amount)
     logging.info('txout value: %.8f', value / 100000000)
     raw_length, script_length, data = get_count(data[8:])
     script, data = data[:script_length], data[script_length:]
     logging.info('txout script: %r', script)
     raw_output += raw_length + script
-    return raw_output, data
+    output = [raw_amount, raw_length, script]
+    return raw_output, output, data
 
 def get_count(data):
     r'''

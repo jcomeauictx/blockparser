@@ -13,13 +13,15 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 SCRIPT_OPS = (
     (0x00, [
         "stack.append('FALSE')",
-        "stack.append(b'')"]
+        "stack.append(b'')",
+        'pass']
     ),
 )
 SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (opcode, [
         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
-        'stack.append(bytes([script.pop(0) for i in range(opcode)]))'])
+        'stack.append(bytes([script.pop(0) for i in range(opcode)]))',
+        '[script.pop(0) for i in range(opcode)]'])
     for opcode in range(0x01, 0x4c)
 )
 SCRIPT_OPS += (
@@ -27,7 +29,9 @@ SCRIPT_OPS += (
         ('count = script.pop(0);'
          'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
         ('count = script.pop(0);'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))')],
+         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
+        ('count = script.pop(0);'
+         '[script.pop(0) for i in range(count)]')]
     ),
     (0x4d, [
         ("count = struct.unpack('<H', bytes("
@@ -35,7 +39,10 @@ SCRIPT_OPS += (
          'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
         ("count = struct.unpack('<H', bytes("
          '[script.pop(0) for i in range(2)]));'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))')],
+         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
+        ("count = struct.unpack('<H', bytes("
+         '[script.pop(0) for i in range(2)]));'
+         '[script.pop(0) for i in range(count)]')]
     ),
     (0x4e, [
         ("count = struct.unpack('<L', bytes("
@@ -43,67 +50,89 @@ SCRIPT_OPS += (
          'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
         ("count = struct.unpack('<L', bytes("
          '[script.pop(0) for i in range(4)]));'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))')],
+         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
+        ("count = struct.unpack('<L', bytes("
+         '[script.pop(0) for i in range(4)]));'
+         '[script.pop(0) for i in range(count)]')]
     ),
     (0x4f, [
         'stack.append(-1)',
-        'stack.append(-1)'],
+        'stack.append(-1)',
+        'pass']
     ),
     (0x50, [
         "stack.append('RESERVED')",
-        "raise NotImplemented('reserved opcode 0x50')"],
+        "raise ReservedWordError('reserved opcode 0x50')",
+        'pass']
     ),
     (0x51, [
         "stack.append('TRUE')",
-        'stack.append(1)'],
+        'stack.append(1)',
+        'pass']
     )
 )
 SCRIPT_OPS += tuple(  # 0x52 - 0x60 are OP_2 through OP_16
     (opcode, [
         'stack.append(opcode - 0x50)',
-        'stack.append(opcode - 0x50)'])
+        'stack.append(opcode - 0x50)',
+        'pass'])
     for opcode in range(0x52, 0x60)
 )
 SCRIPT_OPS += (
     (0x61, [
         "stack.append('NOP')",
-        'pass'],
+        'pass',
+        'pass']
     ),
     (0x62, [
         'VER',
-        "raise NotImplemented('reserved opcode 0x62')"],
+        "raise ReservedWordError('reserved opcode 0x62')",
+        'pass']
     ),
     (0x63, [
         'IF',
-        "raise NotImplementedError('OP_IF not yet implemented')"],
+        "raise NotImplementedError('OP_IF not yet implemented')",
+        'pass']
     ),
     (0x64, [
         'NOTIF',
-        "raise NotImplementedError('OP_NOTIF not yet implemented')"],
+        "raise NotImplementedError('OP_NOTIF not yet implemented')",
+        'pass']
     ),
     (0x65, [
         'VERIF',
-        "raise NotImplemented('reserved opcode 0x65')"],
+        "raise ReservedWordError('reserved opcode 0x65')",
+        'pass']
     ),
     (0x66, [
         'VERNOTIF',
-        "raise NotImplemented('reserved opcode 0x66')"],
+        "raise ReservedWordError('reserved opcode 0x66')",
+        'pass']
     ),
     (0x67, [
         'ELSE',
-        "raise NotImplementedError('OP_ELSE not yet implemented')"],
+        "raise NotImplementedError('OP_ELSE not yet implemented')",
+        'pass']
     ),
     (0x68, [
         'ENDIF',
-        "raise NotImplementedError('OP_ENDIF not yet implemented')"],
+        "raise NotImplementedError('OP_ENDIF not yet implemented')",
+        'pass']
+    ),
+    (0x69, [
+        'VERIFY',
+        "if not stack.pop(0): raise TransactionInvalidError('VERIFY failed')",
+        'pass']
     ),
     (0x76, [
         "stack.append('DUP')",
-        'stack.append(stack[-1])'],
+        'stack.append(stack[-1])',
+        'pass']
     ),
     (0xac, [
         "stack.append('CHECKSIG')",
-        'stack.pop(-1); stack[-1] = 1'],  # FIXME: simulating success for now
+        'stack.pop(-1); stack[-1] = 1',  # FIXME: simulating success for now
+        'pass']
     ),
 )
 TESTSCRIPTS = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG

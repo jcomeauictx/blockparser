@@ -51,7 +51,7 @@ SCRIPT_OPS += (
     ),
     (0x50, [
         "stack.append('RESERVED')",
-        "raise NotImplementedError('reserved opcode 0x50')"],
+        "raise NotImplemented('reserved opcode 0x50')"],
     ),
     (0x51, [
         "stack.append('TRUE')",
@@ -68,6 +68,34 @@ SCRIPT_OPS += (
     (0x61, [
         "stack.append('NOP')",
         'pass'],
+    ),
+    (0x62, [
+        'VER',
+        "raise NotImplemented('reserved opcode 0x62')"],
+    ),
+    (0x63, [
+        'IF',
+        "raise NotImplementedError('OP_IF not yet implemented')"],
+    ),
+    (0x64, [
+        'NOTIF',
+        "raise NotImplementedError('OP_NOTIF not yet implemented')"],
+    ),
+    (0x65, [
+        'VERIF',
+        "raise NotImplemented('reserved opcode 0x65')"],
+    ),
+    (0x66, [
+        'VERNOTIF',
+        "raise NotImplemented('reserved opcode 0x66')"],
+    ),
+    (0x67, [
+        'ELSE',
+        "raise NotImplementedError('OP_ELSE not yet implemented')"],
+    ),
+    (0x68, [
+        'ENDIF',
+        "raise NotImplementedError('OP_ENDIF not yet implemented')"],
     ),
     (0x76, [
         "stack.append('DUP')",
@@ -99,6 +127,12 @@ TESTSCRIPTS = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
         ], b'\x00\x00\x00\x00'
     ]
 )
+
+class InvalidTransactionError(ValueError):
+    pass
+
+class ReservedWordError(ValueError):
+    pass
 
 def display(transaction):
     '''
@@ -132,23 +166,30 @@ def run(transaction):
     '''
     stack = []
     opstack = []
+    altstack = []
+    ifstack = []
     opcodes = dict(SCRIPT_OPS)
     scripts = [inputscript[-2] for inputscript in transaction[-4]]
     scripts += [outputscript[-1] for outputscript in transaction[-2]]
-    for scriptbinary in scripts:
-        script = list(scriptbinary)  # gives list of numbers (`ord`s)
-        while script:
-            opcode = script.pop(0)
-            operation = opcodes.get(opcode, None)
-            if operation is None:
-                raise NotImplementedError('unrecognized opcode 0x%x' % opcode)
-            else:
-                run_op = operation[1]
-                logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
-                exec(run_op, {**globals(), **locals()})
+    try:
+        for scriptbinary in scripts:
+            script = list(scriptbinary)  # gives list of numbers (`ord`s)
+            while script:
+                opcode = script.pop(0)
+                operation = opcodes.get(opcode, None)
+                if operation is None:
+                    raise NotImplementedError('no such opcode 0x%x' % opcode)
+                else:
+                    run_op = operation[1]
+                    logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
+                    exec(run_op, {**globals(), **locals()})
             logging.info('stack: %s', stack)
+    except (InvalidTransactionError, ReservedWordError):
+        logging.error('script failed or otherwise invalid')
+        logging.info('stack: %s', stack)
+        stack.push(False)
     result = bool(stack.pop(-1))
-    logging.debug('script result: %s', ['fail', 'pass'][result])
+    logging.debug('transaction result: %s', ['fail', 'pass'][result])
 
 if __name__ == '__main__':
     SCRIPTS = TESTSCRIPTS

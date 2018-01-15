@@ -13,14 +13,14 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 SCRIPT_OPS = (
     (0x00, [
         "stack.append('FALSE')",
-        'stack.append(0)']
+        "stack.append(b'')"]
     ),
 )
 SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
-    (n,
-        ['stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
-         'stack.append(bytes([script.pop(0) for i in range(opcode)]))'])
-    for n in range(0x01, 0x4c)
+    (opcode, [
+        'stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
+        'stack.append(bytes([script.pop(0) for i in range(opcode)]))'])
+    for opcode in range(0x01, 0x4c)
 )
 SCRIPT_OPS += (
     (0x4c, [
@@ -46,12 +46,28 @@ SCRIPT_OPS += (
          'stack.append(bytes([script.pop(0) for i in range(count)]))')],
     ),
     (0x4f, [
-        "stack.append(-1)",
+        'stack.append(-1)',
         'stack.append(-1)'],
     ),
     (0x50, [
         "stack.append('RESERVED')",
         "raise NotImplementedError('reserved opcode 0x50')"],
+    ),
+    (0x51, [
+        "stack.append('TRUE')",
+        'stack.append(1)'],
+    )
+)
+SCRIPT_OPS += tuple(  # 0x52 - 0x60 are OP_2 through OP_16
+    (opcode, [
+        'stack.append(opcode - 0x50)',
+        'stack.append(opcode - 0x50)'])
+    for opcode in range(0x52, 0x60)
+)
+SCRIPT_OPS += (
+    (0x61, [
+        "stack.append('NOP')",
+        'pass'],
     ),
     (0x76, [
         "stack.append('DUP')",

@@ -168,7 +168,8 @@ def parse_transaction(data):
     logging.info('number of transaction outputs: %d', out_count)
     outputs, data = parse_outputs(out_count, data)
     logging.debug('length of data after parse_outputs: %d', len(data))
-    raw_transaction += raw_in_count + inputs + raw_out_count + outputs
+    raw_transaction += (raw_in_count + b''.join(inputs) +
+        raw_out_count + b''.join(outputs))
     lock_time, data = data[:4], data[4:]
     raw_transaction += lock_time
     logging.info('lock time: %s', to_hex(lock_time))
@@ -183,21 +184,21 @@ def parse_inputs(count, data):
     '''
     return transaction inputs
     '''
-    inputs = b''
+    inputs = []
     for index in range(count):
         logging.debug('parse_inputs: len(data): %d', len(data))
         tx_input, data = parse_input(data)
-        inputs += tx_input
+        inputs.append(tx_input)
     return inputs, data
 
 def parse_outputs(count, data):
     '''
     return transaction outputs
     '''
-    outputs = b''
+    outputs = []
     for index in range(count):
         tx_output, data = parse_output(data)
-        outputs += tx_output
+        outputs.append(tx_output)
     return outputs, data
 
 def parse_input(data):
@@ -215,7 +216,7 @@ def parse_input(data):
     logging.debug('script_length: %d', script_length)
     script, data = data[:script_length], data[script_length:]
     raw_input += script
-    logging.info('txin script: %s', script)
+    logging.info('txin script: %r', script)
     sequence_number = data[:4]
     logging.info('txin sequence number: %s', show_long(sequence_number))
     raw_input += sequence_number
@@ -230,7 +231,7 @@ def parse_output(data):
     logging.info('txout value: %.8f', value / 100000000)
     raw_length, script_length, data = get_count(data[8:])
     script, data = data[:script_length], data[script_length:]
-    logging.info('txout script: %s', script)
+    logging.info('txout script: %r', script)
     raw_output += raw_length + script
     return raw_output, data
 
@@ -242,7 +243,7 @@ def get_count(data):
     >>> get_count(b'\xfd@\x01\x04\xe3v@\x05\x99')[0]
     320
     '''
-    logging.debug('get_count: next 9 data bytes: %s', data[:9])
+    logging.debug('get_count: next 9 data bytes: %r', data[:9])
     packing, offset, length = VARINT.get(data[0], ('B', 0, 1))
     count = struct.unpack(packing, data[offset:offset + length])[0]
     raw_count, data = data[:offset + length], data[offset + length:]

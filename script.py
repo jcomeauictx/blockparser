@@ -10,17 +10,19 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 #  its numeric value in hexadecimal;
 #  its "representation", most readable way to display the script;
 #  the Python code to be `exec`d in the context of the `run` routine
-SCRIPT_OPS = tuple(  # 0x01 through 0x4b are all implied PUSH operations
+SCRIPT_OPS = (
+    (0x00, [
+        "stack.append('FALSE')",
+        'stack.append(0)']
+    ),
+)
+SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (n,
         ['stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
          'stack.append(bytes([script.pop(0) for i in range(opcode)]))'])
     for n in range(0x01, 0x4c)
 )
 SCRIPT_OPS += (
-    (0x00, [
-        "stack.append('FALSE')",
-        'stack.append(0)']
-    ),
     (0x4c, [
         ('count = script.pop(0);'
          'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),

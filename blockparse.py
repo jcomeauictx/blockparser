@@ -174,6 +174,8 @@ def parse_transaction(data):
     logging.info('lock time: %s', to_hex(lock_time))
     logging.debug('raw transaction (%d bytes): %s',
                   len(raw_transaction), to_hex(raw_transaction))
+    logging.debug('raw transaction split: %s', [
+        version, raw_in_count, inputs, raw_out_count, outputs, lock_time])
     logging.info('transaction hash: %s', show_hash(get_hash(raw_transaction)))
     return raw_transaction, data
 

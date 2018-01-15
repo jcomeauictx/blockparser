@@ -9,6 +9,7 @@ https://bitcoin.org/en/developer-guide,
 https://bitcoin.org/en/developer-reference,
 and many other sources.
 '''
+from __future__ import division, print_function
 import sys, os, struct, binascii, logging, hashlib
 from datetime import datetime
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
@@ -28,6 +29,9 @@ VARINT = {
     0xfe: ('<L', 1, 4),
     0xff: ('<Q', 1, 8),
 }
+# extend VARINT for Python2:
+VARINT.update({chr(n): l for n, l in VARINT.items()})
+
 UNPACKER = {
     # fetch using len(bytestring)
     1: 'B',
@@ -231,6 +235,7 @@ def parse_output(data):
     '''
     parse and return a single transaction output
     '''
+    logging.debug('first part of output: %s', to_hex(data[:256]))
     raw_output = raw_amount = data[:8]
     value = to_long(raw_amount)
     logging.info('txout value: %.8f', value / 100000000)
@@ -249,11 +254,15 @@ def get_count(data):
     extract and decode VarInt count and return it with remainder of data
 
     # the following failed (got 253) before VARINT dict was corrected
-    >>> get_count(b'\xfd@\x01\x04\xe3v@\x05\x99')[0]
+    >>> get_count(b'\xfd@\x01\x04\xe3v@\x05\x99')[1]
     320
+    >>> get_count(b'\xfdP\x01D\x87\x1c\x00\x00\x00')[1]
+    336
     '''
     logging.debug('get_count: next 9 data bytes: %r', data[:9])
     packing, offset, length = VARINT.get(data[0], ('B', 0, 1))
+    logging.debug('packing: %s, offset: %d, length: %d',
+                  packing, offset, length)
     count = struct.unpack(packing, data[offset:offset + length])[0]
     raw_count, data = data[:offset + length], data[offset + length:]
     logging.debug('length of data after get_count: %d', len(data))

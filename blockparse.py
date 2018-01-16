@@ -45,13 +45,13 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     dump out block files
     '''
-    index = 0
-    magic = ''
     minheight, maxheight = int(minblock), int(maxblock)
     logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
     height = 0
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
     for blockfile in blockfiles or DEFAULT:
+        magic = ''
+        index = 0
         with open(blockfile, 'rb') as datainput:
             blockdata = datainput.read()  # not necessarily very efficient
         logging.warning('NOTE: "height" values shown are relative'
@@ -79,10 +79,14 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.debug('transaction data (partial): %r',
                               transactions[:80])
             elif height > maxheight:
-                break
+                logging.debug('height %d > maxheight %d', height, maxheight)
+                break  # still executes `height += 1` below!
             else:
                 logging.debug('height: %d', height)
             height += 1
+        logging.debug('height: %d, maxheight: %d', height, maxheight)
+        if height > maxheight:
+            break
 
 def parse_blockheader(blockheader):
     '''

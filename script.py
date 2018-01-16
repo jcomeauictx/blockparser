@@ -178,7 +178,7 @@ SCRIPT_OPS += (
 DISABLED = [  # add all opcodes disabled in Bitcoin core
 #    0x83, 0x84, 0x85, 0x86
 ]
-TESTSCRIPTS = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
+TEST_CHECKSIG = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
     [b'\x01\x00\x00\x00', b'\x01', [  # inputs
         [b'\xc9\x97\xa5\xe5n\x10A\x02\xfa \x9cj\x85-\xd9\x06`\xa2\x0b-\x9c5$#'
          b'\xed\xce%\x85\x7f\xcd7\x04', b'\x00\x00\x00\x00', b'H',
@@ -196,6 +196,20 @@ TESTSCRIPTS = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
          b'\x8a8.\x97\xb1H.\xca\xd7\xb1H\xa6\x90\x9a\\\xb2\xe0\xea\xdd\xfb'
          b'\x84\xcc\xf9tDd\xf8.\x16\x0b\xfa\x9b\x8bd\xf9\xd4\xc0?\x99\x9b\x86C'
          b'\xf6V\xb4\x12\xa3\xac']
+        ], b'\x00\x00\x00\x00'
+    ],
+    # previous transaction (in block 9)
+    [b'\x01\x00\x00\x00', b'\x01', [  # inputs
+        [b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+         b'\x00\x00', b'\xff\xff\xff\xff', b'\x07',
+         b'\x04\xff\xff\x00\x1d\x014', b'\xff\xff\xff\xff']
+        ], b'\x01', [  # outputs
+        [b'\x00\xf2\x05*\x01\x00\x00\x00', b'C',
+         b'A\x04\x11\xdb\x93\xe1\xdc\xdb\x8a\x01kI\x84\x0f\x8cS\xbc\x1e\xb6'
+         b'\x8a8.\x97\xb1H.\xca\xd7\xb1H\xa6\x90\x9a\\\xb2\xe0\xea\xdd\xfb'
+         b'\x84\xcc\xf9tDd\xf8.\x16\x0b\xfa\x9b\x8bd\xf9\xd4\xc0?\x99\x9b'
+         b'\x86C\xf6V\xb4\x12\xa3\xac']
         ], b'\x00\x00\x00\x00'
     ]
 )
@@ -268,9 +282,14 @@ def run(transaction):
     result = bool(stack.pop(-1))
     logging.debug('transaction result: %s', ['fail', 'pass'][result])
 
+def test_checksig(current_tx, previous_tx):
+    '''
+    display and run scripts in given transactions
+    '''
+    for tx in [current_tx, previous_tx]:
+        logging.debug('Displaying scripts in %s', tx)
+        display(tx)
+        logging.debug('Running scripts...')
+        run(tx)
 if __name__ == '__main__':
-    SCRIPTS = TESTSCRIPTS
-    logging.debug('Displaying scripts %s...', TESTSCRIPTS)
-    display(TESTSCRIPTS)
-    logging.debug('Running scripts...')
-    run(TESTSCRIPTS)
+    test_checksig(*TEST_CHECKSIG)

@@ -139,6 +139,31 @@ SCRIPT_OPS += (
         'stack.append(altstack.pop(-1)',
         'pass']
     ),
+    (0x6d, [
+        '2DROP',
+        'stack[-2:] = []',
+        'pass']
+    ),
+    (0x6e, [
+        '2DUP',
+        'stack.extend(stack[-2:])',
+        'pass']
+    ),
+    (0x6f, [
+        '3DUP',
+        'stack.extend(stack[-3:])',
+        'pass']
+    ),
+    (0x70, [
+        '2OVER',
+        'stack.extend(stack[-4:-2])',
+        'pass']
+    ),
+    (0x71, [
+        '2ROT',
+        'stack.extend(stack[-6:-4]); stack[-8:-6] = []',
+        'pass']
+    ),
     (0x76, [
         "stack.append('DUP')",
         'stack.append(stack[-1])',
@@ -150,6 +175,9 @@ SCRIPT_OPS += (
         'pass']
     ),
 )
+DISABLED = [  # add all opcodes disabled in Bitcoin core
+#    0x83, 0x84, 0x85, 0x86
+]
 TESTSCRIPTS = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
     [b'\x01\x00\x00\x00', b'\x01', [  # inputs
         [b'\xc9\x97\xa5\xe5n\x10A\x02\xfa \x9cj\x85-\xd9\x06`\xa2\x0b-\x9c5$#'
@@ -209,22 +237,27 @@ def run(transaction):
     showing stack at end of each operation
     '''
     stack = []
-    opstack = []
     altstack = []
-    ifstack = []
     opcodes = dict(SCRIPT_OPS)
+    for opcode in DISABLED:
+        opcodes.pop(opcode)
     scripts = [inputscript[-2] for inputscript in transaction[-4]]
     scripts += [outputscript[-1] for outputscript in transaction[-2]]
     try:
         for scriptbinary in scripts:
             script = list(scriptbinary)  # gives list of numbers (`ord`s)
+            reference = list(script)  # make a copy
+            ifstack = []  # internal stack for each script
             while script:
                 opcode = script.pop(0)
                 operation = opcodes.get(opcode, None)
                 if operation is None:
                     raise NotImplementedError('no such opcode 0x%x' % opcode)
                 else:
-                    run_op = operation[1]
+                    if ifstack and not ifstack[-1]:
+                        run_op = operation[2]
+                    else:
+                        run_op = operation[1]
                     logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
                     exec(run_op, {**globals(), **locals()})
             logging.info('stack: %s', stack)

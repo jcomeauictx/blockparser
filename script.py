@@ -9,11 +9,15 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 # each item in SCRIPT_OPS gives:
 #  its numeric value in hexadecimal;
 #  its "representation", most readable way to display the script;
-#  the Python code to be `exec`d in the context of the `run` routine
+#  the Python code to be `exec`d in the context of the `run` routine;
+#  the Python code to be `exec`d in the context of an inactive IF-ELSE branch;
+#  the Python code to be `exec`d in the context of OP_CHECKSIG while removing
+#  all OP_CODESEPARATORS (conditionals and all args must be skipped over)
 SCRIPT_OPS = (
     (0x00, [
         "stack.append('FALSE')",
         "stack.append(b'')",
+        'pass',
         'pass']
     ),
 )
@@ -21,7 +25,9 @@ SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (opcode, [
         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
         'stack.append(bytes([script.pop(0) for i in range(opcode)]))',
-        '[script.pop(0) for i in range(opcode)]'])
+        '[script.pop(0) for i in range(opcode)]',
+        'offset += opcode']
+    )
     for opcode in range(0x01, 0x4c)
 )
 SCRIPT_OPS += (
@@ -31,7 +37,8 @@ SCRIPT_OPS += (
         ('count = script.pop(0);'
          'stack.append(bytes([script.pop(0) for i in range(count)]))'),
         ('count = script.pop(0);'
-         '[script.pop(0) for i in range(count)]')]
+         '[script.pop(0) for i in range(count)]'),
+        ('count = script[offset]; offset += count')]
     ),
     (0x4d, [
         ("count = struct.unpack('<H', bytes("

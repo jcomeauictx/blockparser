@@ -11,13 +11,10 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 #  its "representation", most readable way to display the script;
 #  the Python code to be `exec`d in the context of the `run` routine;
 #  the Python code to be `exec`d in the context of an inactive IF-ELSE branch;
-#  the Python code to be `exec`d in the context of OP_CHECKSIG while removing
-#  all OP_CODESEPARATORS (conditionals and all args must be skipped over)
 SCRIPT_OPS = (
     (0x00, [
         "stack.append('FALSE')",
         "stack.append(b'')",
-        'pass',
         'pass']
     ),
 )
@@ -25,8 +22,7 @@ SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (opcode, [
         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
         'stack.append(bytes([script.pop(0) for i in range(opcode)]))',
-        '[script.pop(0) for i in range(opcode)]',
-        'offset += opcode']
+        '[script.pop(0) for i in range(opcode)]']
     )
     for opcode in range(0x01, 0x4c)
 )
@@ -37,8 +33,7 @@ SCRIPT_OPS += (
         ('count = script.pop(0);'
          'stack.append(bytes([script.pop(0) for i in range(count)]))'),
         ('count = script.pop(0);'
-         '[script.pop(0) for i in range(count)]'),
-        ('count = script[offset]; offset += count')]
+         '[script.pop(0) for i in range(count)]')]
     ),
     (0x4d, [
         ("count = struct.unpack('<H', bytes("
@@ -185,7 +180,8 @@ SCRIPT_OPS += (
 DISABLED = [  # add all opcodes disabled in Bitcoin core
 #    0x83, 0x84, 0x85, 0x86
 ]
-TEST_CHECKSIG = (  # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
+TEST_CHECKSIG = (
+    # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
     [b'\x01\x00\x00\x00', b'\x01', [  # inputs
         [b'\xc9\x97\xa5\xe5n\x10A\x02\xfa \x9cj\x85-\xd9\x06`\xa2\x0b-\x9c5$#'
          b'\xed\xce%\x85\x7f\xcd7\x04', b'\x00\x00\x00\x00', b'H',
@@ -227,76 +223,98 @@ class InvalidTransactionError(ValueError):
 class ReservedWordError(ValueError):
     pass
 
-def display(transaction):
+def parse(scriptbinary, display=True):
     '''
     breaks down binary script into something readable (to a FORTHer)
+
+    returns same-sized list of opcodes parsed from script
     '''
     stack = []
+    parsed = []
     opcodes = dict(SCRIPT_OPS)
-    scripts = [inputscript[-2] for inputscript in transaction[-4]]
-    scripts += [outputscript[-1] for outputscript in transaction[-2]]
-    for scriptbinary in scripts:
-        script = list(scriptbinary)  # gives list of numbers (`ord`s)
-        while script:
-            opcode = script.pop(0)
-            operation = opcodes.get(opcode, None)
-            logging.debug('opcode: %r, operation: %r', opcode, operation)
-            if operation is None:
-                stack.append(hex(opcode) + "(not yet implemented)")
-            else:
-                display_op = operation[0]
-                logging.debug('`exec`ing 0x%x, %s', opcode, display_op)
-                exec(display_op, {**globals(), **locals()})
+    script = list(scriptbinary)  # gives list of numbers (`ord`s)
+    while script:
+        opcode = script.pop(0)
+        operation = opcodes.get(opcode, None)
+        logging.debug('opcode: %r, operation: %r', opcode, operation)
+        if operation is None:
+            stack.append(hex(opcode) + " (not yet implemented)")
+        else:
+            display_op = operation[0]
+            logging.debug('`exec`ing 0x%x, %s', opcode, display_op)
+            exec(display_op, {**globals(), **locals()})
+    if display:
         while stack:
             print(stack.pop(0))
         print('-----')
+    return parsed
 
-def run(transaction):
+def run(scriptbinary, parsed, stack=None, checksig_prep=False):
     '''
-    executes script the same way (hopefully) as Bitcoin Core would
+    executes scripts the same way (hopefully) as Bitcoin Core would
 
     showing stack at end of each operation
+
+    if instead checksig_prep is True, only returns copy of script with
+    OP_CODESEPARATORs removed; does not run anything
     '''
-    stack = []
+    stack = stack or []  # you can pass in a stack from previous script
+    logging.debug('stack at start of run: %s', stack)
     altstack = []
     opcodes = dict(SCRIPT_OPS)
     for opcode in DISABLED:
         opcodes.pop(opcode)
-    scripts = [inputscript[-2] for inputscript in transaction[-4]]
-    scripts += [outputscript[-1] for outputscript in transaction[-2]]
     try:
-        for scriptbinary in scripts:
-            script = list(scriptbinary)  # gives list of numbers (`ord`s)
-            reference = list(script)  # make a copy
-            ifstack = []  # internal stack for each script
-            while script:
-                opcode = script.pop(0)
-                operation = opcodes.get(opcode, None)
-                if operation is None:
-                    raise NotImplementedError('no such opcode 0x%x' % opcode)
+        script = list(scriptbinary)  # gives list of numbers (`ord`s)
+        reference = list(script)  # make a copy
+        ifstack = []  # internal stack for each script
+        while script:
+            opcode = script.pop(0)
+            operation = opcodes.get(opcode, None)
+            if operation is None:
+                raise NotImplementedError('no such opcode 0x%x' % opcode)
+            else:
+                if ifstack and not ifstack[-1]:
+                    run_op = operation[2]
                 else:
-                    if ifstack and not ifstack[-1]:
-                        run_op = operation[2]
-                    else:
-                        run_op = operation[1]
-                    logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
-                    exec(run_op, {**globals(), **locals()})
-            logging.info('stack: %s', stack)
+                    run_op = operation[1]
+                logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
+                exec(run_op, {**globals(), **locals()})
+            logging.info('script: %r, stack: %s', script, stack)
     except (InvalidTransactionError, ReservedWordError):
         logging.error('script failed or otherwise invalid')
         logging.info('stack: %s', stack)
-        stack.push(False)
+        stack[:] = []  # empty stack
+    logging.debug('run leaves stack at: %s', stack)
+    # need to actually pass the stack back to caller...
+    # problem with using `exec` is that it has its own environment
+    return stack
+
+def test_checksig(current_tx, txin_index, previous_tx):
+    '''
+    display and run scripts in given transactions to test OP_CHECKSIG
+    '''
+    stack = []
+    logging.debug('parsing and displaying current txin script...')
+    txin = current_tx[2][txin_index]
+    logging.debug('txin: %s', txin)
+    logging.debug('previous tx hash: %s', b2a_hex(txin[0]))
+    txout_index = struct.unpack('<L', txin[1])[0]
+    txin_script = txin[3]
+    parsed = parse(txin_script)
+    logging.debug('running txin script...')
+    stack = run(txin_script, parsed, stack)
+    logging.debug('stack after running txin script: %s', stack)
+    logging.debug('parsing and displaying previous txout script...')
+    txout = previous_tx[4]
+    txout_script = txout[txout_index][2]
+    parsed = parse(txout_script)
+    logging.debug('stack before running txout script: %s', stack)
+    logging.debug('running txout script %r...', txout_script)
+    stack = run(txout_script, parsed, stack)
     result = bool(stack.pop(-1))
     logging.debug('transaction result: %s', ['fail', 'pass'][result])
 
-def test_checksig(current_tx, previous_tx):
-    '''
-    display and run scripts in given transactions
-    '''
-    for tx in [current_tx, previous_tx]:
-        logging.debug('Displaying scripts in %s', tx)
-        display(tx)
-        logging.debug('Running scripts...')
-        run(tx)
 if __name__ == '__main__':
-    test_checksig(*TEST_CHECKSIG)
+    # default operation is to test OP_CHECKSIG
+    test_checksig(TEST_CHECKSIG[0], 0, TEST_CHECKSIG[1])

@@ -121,7 +121,22 @@ SCRIPT_OPS += (
     ),
     (0x69, [
         'VERIFY',
-        "if not stack.pop(0): raise TransactionInvalidError('VERIFY failed')",
+        "if not stack.pop(-1): raise TransactionInvalidError('VERIFY failed')",
+        'pass']
+    ),
+    (0x6a, [
+        'RETURN',
+        "raise TransactionInvalidError('RETURN')",
+        'pass']
+    ),
+    (0x6b, [
+        'TOALTSTACK',
+        'alstack.append(stack.pop(-1)',
+        'pass']
+    ),
+    (0x6c, [
+        'FROMALTSTACK',
+        'stack.append(altstack.pop(-1)',
         'pass']
     ),
     (0x76, [

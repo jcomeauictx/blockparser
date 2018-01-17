@@ -533,10 +533,10 @@ def run(scriptbinary, txnew, parsed, stack=None, checksig_prep=False):
                 logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
                 exec(run_op, {**globals(), **locals()})
             logging.info('script: %r, stack: %s', script, stack)
-    except (TransactionInvalidError, ReservedWordError):
-        logging.error('script failed or otherwise invalid')
+    except (TransactionInvalidError, ReservedWordError) as failed:
+        logging.error('script failed or otherwise invalid: %s', failed)
         logging.info('stack: %s', stack)
-        stack[:] = []  # empty stack
+        stack.append(False)
     logging.debug('run leaves stack at: %s', stack)
     # need to actually pass the stack back to caller...
     # problem with using `exec` is that it has its own environment

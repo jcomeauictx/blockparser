@@ -125,7 +125,7 @@ SCRIPT_OPS += (
     ),
     (0x69, [
         "stack.append('VERIFY')",
-        "if not stack.pop(-1): raise TransactionInvalidError('VERIFY failed')",
+        "if not stack.pop(): raise TransactionInvalidError('VERIFY failed')",
         'pass']
     ),
     (0x6a, [
@@ -135,12 +135,12 @@ SCRIPT_OPS += (
     ),
     (0x6b, [
         "stack.append('TOALTSTACK')",
-        'alstack.append(stack.pop(-1)',
+        'alstack.append(stack.pop()',
         'pass']
     ),
     (0x6c, [
         "stack.append('FROMALTSTACK')",
-        'stack.append(altstack.pop(-1)',
+        'stack.append(altstack.pop()',
         'pass']
     ),
     (0x6d, [
@@ -185,7 +185,7 @@ SCRIPT_OPS += (
     ),
     (0x75, [
         "stack.append('DROP')",
-        'stack.pop(-1)',
+        'stack.pop()',
         'pass']
     ),
     (0x76, [
@@ -205,12 +205,12 @@ SCRIPT_OPS += (
     ),
     (0x79, [
         "stack.append('PICK')",
-        'stack.append(stack[-1 - stack.pop(-1))]',
+        'stack.append(stack[-1 - stack.pop())]',
         'pass']
     ),
     (0x7a, [
         "stack.append('ROLL')",
-        'stack.append(stack.pop(stack[-1 - stack.pop(-1)]))',
+        'stack.append(stack.pop(stack[-1 - stack.pop()]))',
         'pass']
     ),
     (0x7b, [
@@ -230,12 +230,12 @@ SCRIPT_OPS += (
     ),
     (0x80, [
         "stack.append('LEFT')",
-        'stack.append(stack.pop(-2)[:stack.pop(-1)])',
+        'stack.append(stack.pop(-2)[:stack.pop()])',
         'pass']
     ),
     (0x81, [
         "stack.append('RIGHT')",
-        'stack.append(stack.pop(-2)[stack.pop(-1) - 1:])',
+        'stack.append(stack.pop(-2)[stack.pop() - 1:])',
         'pass']
     ),
     (0x82, [
@@ -250,27 +250,27 @@ SCRIPT_OPS += (
     ),
     (0x84, [
         "stack.append('AND')",
-        'stack.append(stack.pop(-1) & stack.pop(-1))',
+        'stack.append(stack.pop() & stack.pop())',
         'pass']
     ),
     (0x85, [
         "stack.append('OR')",
-        'stack.append(stack.pop(-1) | stack.pop(-1))',
+        'stack.append(stack.pop() | stack.pop())',
         'pass']
     ),
     (0x86, [
         "stack.append('XOR')",
-        'stack.append(stack.pop(-1) ^ stack.pop(-1))',
+        'stack.append(stack.pop() ^ stack.pop())',
         'pass']
     ),
     (0x87, [
         "stack.append('EQUAL')",
-        'stack.append(stack.pop(-1) == stack.pop(-1))',
+        'stack.append(stack.pop() == stack.pop())',
         'pass']
     ),
     (0x88, [
         "stack.append('EQUALVERIFY')",
-        ('if stack.pop(-1) != stack.pop(-1):'
+        ('if stack.pop() != stack.pop():'
          " raise(TransactionInvalidError('failed EQUALVERIFY'))"),
         'pass']
     ),
@@ -326,12 +326,12 @@ SCRIPT_OPS += (
     ),
     (0x93, [
         "stack.append('ADD')",
-        'stack.append(stack.pop(-1) + stack.pop(-1))',
+        'stack.append(stack.pop() + stack.pop())',
         'pass']
     ),
     (0x94, [
         "stack.append('SUB')",
-        'stack.append(-stack.pop(-1) + stack.pop(-1))',
+        'stack.append(-stack.pop() + stack.pop())',
         'pass']
     ),
     (0x95, [
@@ -549,7 +549,8 @@ def hash256(stack=None, hashlib=None, **ignored):
     sha256d hash, which is the hash of a hash
     '''
     data = stack.pop()
-    return hashlib.sha256(hashlib.sha256(data).digest()).digest()
+    stack.append(hashlib.sha256(hashlib.sha256(data).digest()).digest())
+    return stack[-1]  # for conventional caller
 
 def hash160(stack=None, hashlib=None, **ignored):
     '''
@@ -558,7 +559,8 @@ def hash160(stack=None, hashlib=None, **ignored):
     data = stack.pop()
     ripemd160 = hashlib.new('ripemd160')
     ripemd160.update(hashlib.sha256(data).digest())
-    return ripemd160.digest()
+    stack.append(ripemd160.digest())
+    return stack[-1]  # for conventional caller
 
 def checksig(stack=None, reference=None, mark=None, parsed=None,
              txnew=None, **ignored):
@@ -571,8 +573,8 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     '''
     logging.debug('checksig stack: %s, reference: %s, mark: %s',
                   stack, reference, mark)
-    pubkey = stack.pop(-1)
-    signature = list(stack.pop(-1))
+    pubkey = stack.pop()
+    signature = list(stack.pop())
     subscript = reference[mark[-1]:]
     checker = list(parsed[mark[-1]:])  # for checking for OP_CODESEPARATORs
     # remove OP_CODESEPARATORs in subscript
@@ -581,7 +583,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
         if checker[offset] == 0xab:  # OP_CODESEPARATOR
             checker.pop(offset)
             subscript.pop(offset)
-    hashtype = signature.pop(-1)
+    hashtype = signature.pop()
     hashtype_code = struct.pack('<L', hashtype)
     txcopy = copy.deepcopy(txnew)
     for input in txcopy[2][1:]:
@@ -592,6 +594,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     serialized = serialize(txcopy) + hashtype_code
     hashed = hash256(stack=[serialized], hashlib=hashlib)[::-1]
     stack.append(ecdsa_verify(hashed, bytes(signature), pubkey))
+    return stack[-1]  # for conventional caller
 
 def serialize(lists):
     '''
@@ -630,7 +633,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     logging.debug('stack before running txout script: %s', stack)
     logging.debug('running txout script %r...', txout_script)
     stack = run(txout_script, current_tx, parsed, stack)
-    result = bool(stack.pop(-1))
+    result = bool(stack.pop())
     logging.debug('transaction result: %s', ['fail', 'pass'][result])
 
 if __name__ == '__main__':

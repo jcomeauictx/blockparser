@@ -191,6 +191,187 @@ SCRIPT_OPS += (
         'stack.append(stack[-1])',
         'pass']
     ),
+    (0x77, [
+        "stack.append('NIP')",
+        'stack.pop(-2)',
+        'pass']
+    ),
+    (0x78, [
+        "stack.append('OVER')",
+        'stack.append(stack[-2])',
+        'pass']
+    ),
+    (0x79, [
+        "stack.append('PICK')",
+        'stack.append(stack[-1 - stack.pop(-1))]',
+        'pass']
+    ),
+    (0x7a, [
+        "stack.append('ROLL')",
+        'stack.append(stack.pop(stack[-1 - stack.pop(-1)]))',
+        'pass']
+    ),
+    (0x7b, [
+        "stack.append('ROT')",
+        'stack.append(stack.pop(-3))',
+        'pass']
+    ),
+    (0x7c, [
+        "stack.append('SWAP')",
+        'stack.append(stack.pop(-2))',
+        'pass']
+    ),
+    (0x7d, [
+        "stack.append('TUCK')",
+        'stack.insert(-2, stack[-1])',
+        'pass']
+    ),
+    (0x80, [
+        "stack.append('LEFT')",
+        'stack.append(stack.pop(-2)[:stack.pop(-1)])',
+        'pass']
+    ),
+    (0x81, [
+        "stack.append('RIGHT')",
+        'stack.append(stack.pop(-2)[stack.pop(-1) - 1:])',
+        'pass']
+    ),
+    (0x82, [
+        "stack.append('SIZE')",
+        'stack.append(len(stack[-1]))',
+        'pass']
+    ),
+    (0x83, [
+        "stack.append('INVERT')",
+        'stack[-1] = ~stack[-1]',
+        'pass']
+    ),
+    (0x84, [
+        "stack.append('AND')",
+        'stack.append(stack.pop(-1) & stack.pop(-1))',
+        'pass']
+    ),
+    (0x85, [
+        "stack.append('OR')",
+        'stack.append(stack.pop(-1) | stack.pop(-1))',
+        'pass']
+    ),
+    (0x86, [
+        "stack.append('XOR')",
+        'stack.append(stack.pop(-1) ^ stack.pop(-1))',
+        'pass']
+    ),
+    (0x87, [
+        "stack.append('EQUAL')",
+        'stack.append(stack.pop(-1) == stack.pop(-1))',
+        'pass']
+    ),
+    (0x88, [
+        "stack.append('EQUALVERIFY')",
+        ('if stack.pop(-1) != stack.pop(-1):'
+         " raise(TransactionInvalidError('failed EQUALVERIFY')"),
+        'pass']
+    ),
+    (0x89, [
+        "stack.append('RESERVED1')",
+        "raise(ReservedWordError('reserved opcode 0x89'))",
+        'pass'],
+    ),
+    (0x8a, [
+        "stack.append('RESERVED2')",
+        "raise(ReservedWordError('reserved opcode 0x8a'))",
+        'pass']
+    ),
+    (0x8b, [
+        "stack.append('1ADD')",
+        'stack[-1] += 1',
+        'pass']
+    ),
+    (0x8c, [
+        "stack.append('1SUB')",
+        'stack[-1] -= 1',
+        'pass']
+    ),
+    (0x8d, [
+        "stack.append('2MUL')",
+        'stack[-1] *= 2',
+        'pass']
+    ),
+    (0x8e, [
+        "stack.append('2DIV')",
+        'stack[-1] //= 2',
+        'pass']
+    ),
+    (0x8f, [
+        "stack.append('NEGATE')",
+        'stack[-1] = -stack[-1]',
+        'pass']
+    ),
+    (0x90, [
+        "stack.append('ABS')",
+        'stack[-1] = abs(stack[-1])',
+        'pass']
+    ),
+    (0x91, [
+        "stack.append('NOT')",
+        'stack[-1] = not stack[-1]',
+        'pass']
+    ),
+    (0x92, [
+        "stack.append('0NOTEQUAL')",
+        'stack[-1] = bool(stack[-1])',
+        'pass']
+    ),
+    (0x93, [
+        "stack.append('ADD')",
+        'stack.append(stack.pop(-1) + stack.pop(-1))',
+        'pass']
+    ),
+    (0x94, [
+        "stack.append('SUB')",
+        'stack.append(-stack.pop(-1) + stack.pop(-1))',
+        'pass']
+    ),
+    (0x95, [
+        "stack.append('MUL')",
+        '_ = stack.pop(0); stack[-1] *= _',
+        'pass']
+    ),
+    (0x96, [
+        "stack.append('DIV')",
+        '_ = stack.pop(0); stack[-1] //= _',
+        'pass']
+    ),
+    (0x97, [
+        "stack.append('MOD')",
+        '_ = stack.pop(0); stack[-1] %= _',
+        'pass']
+    ),
+    (0x98, [
+        "stack.append('LSHIFT')",
+        '_ = stack.pop(0); stack[-1] <<= _',
+        'pass']
+    ),
+    (0x99, [
+        "stack.append('RSHIFT')",
+        '_ = stack.pop(0); stack[-1] >>= _',
+        'pass']
+    ),
+    (0x9a, [
+        "stack.append('BOOLAND')",
+        '_ = stack.pop(0); stack[-1] = stack[-1] and _',
+        'pass']
+    ),
+    (0x9b, [
+        "stack.append('BOOLOR')",
+        '_ = stack.pop(0); stack[-1] = stack[-1] or _',
+        'pass']
+    ),
+    (0x9c, [
+        "stack.append('NUMEQUAL')",
+        'stack.append(stack.pop(0) == stack.pop(0))',
+        'pass']
+    ),
     (0xac, [
         "stack.append('CHECKSIG')",
         'stack.pop(-1); stack[-1] = 1',  # FIXME: simulating success for now

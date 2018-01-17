@@ -271,7 +271,7 @@ SCRIPT_OPS += (
     (0x88, [
         "stack.append('EQUALVERIFY')",
         ('if stack.pop(-1) != stack.pop(-1):'
-         " raise(TransactionInvalidError('failed EQUALVERIFY')"),
+         " raise(TransactionInvalidError('failed EQUALVERIFY'))"),
         'pass']
     ),
     (0x89, [
@@ -374,6 +374,16 @@ SCRIPT_OPS += (
         'stack.append(stack.pop(0) == stack.pop(0))',
         'pass']
     ),
+    (0xa9, [
+        "stack.append('HASH160')",
+        'hash160(**globals())',
+        'pass']
+    ),
+    (0xaa, [
+        "stack.append('HASH256')",
+        'hash256(**glboals())',
+        'pass']
+    ),
     (0xab, [
         "stack.append('CODESEPARATOR')",
         'mark.append(len(reference) - len(script) - 1)',
@@ -381,14 +391,15 @@ SCRIPT_OPS += (
     ),
     (0xac, [
         "stack.append('CHECKSIG')",
-        "checksig(**globals())",
+        'checksig(**globals())',
         'pass']
     ),
 )
 DISABLED = [  # add all opcodes disabled in Bitcoin core
 #    0x83, 0x84, 0x85, 0x86
 ]
-TEST_CHECKSIG = (
+FIRST = (
+    # first transaction made on blockchain other than coinbase rewards
     # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
     [b'\x01\x00\x00\x00', b'\x01', [  # inputs
         [b'\xc9\x97\xa5\xe5n\x10A\x02\xfa \x9cj\x85-\xd9\x06`\xa2\x0b-\x9c5$#'
@@ -424,8 +435,39 @@ TEST_CHECKSIG = (
         ], b'\x00\x00\x00\x00'
     ]
 )
+PIZZA = (  # pizza transaction from block 57044
+    [b'\x01\x00\x00\x00', b'\x01', [  # inputs
+        [b'\x8d\xd4\xf5\xfb\xd5\xe9\x80\xfc\x02\xf3\\l\xe1E\x93[\x11\xe2\x84'
+         b'`[\xf5\x99\xa1<mA]\xb5]\x07\xa1', b'\x00\x00\x00\x00',
+         b'\x8b', b'H0E\x02!\x00\x99\x08\x14L\xa6S\x9e\tQ+\x92\x95\xc8\xa2pP'
+         b'\xd4x\xfb\xb9o\x8a\xdd\xbc=\x07UD\xdcA2\x87\x02 \x1a\xa5(\xbe+\x90'
+         b'}1m-\xa0h\xdd\x9e\xb1\xe22C\xd9~DMY)\r/\xdd\xf2Ri\xee\x0e\x01A\x04'
+         b'.\x93\x0f9\xbab\xc6SN\xe9\x8e\xd2\x0c\xa9\x89Y\xd3J\xa9\xe0W\xcd'
+         b'\xa0\x1c\xfdB,k\xab6g\xb7d&R\x93\x82\xc2?B\xb9\xb0\x8dx2\xd4\xfe'
+         b'\xe1\xd6\xb47\xa8RnYf|\xe9\xc4\xe9\xdc\xeb\xca\xbb',
+         b'\xff\xff\xff\xff']
+    ], b'\x02', [  # outputs
+        [b'\x00q\x9a\x81\x86\x00\x00\x00', b'\x19',
+         b"v\xa9\x14\xdf\x1b\xd4\x9al\x9e4\xdf\xa8c\x1f,T\xcf9\x98`'P\x1b\x88"
+         b'\xac'],
+        [b'\x00\x9f\nSb\x00\x00\x00', b'C',
+         b'A\x04\xcd^\x97&\xe6\xaf\xea\xe3W\xb1\x80k\xe2ZL=8\x11wX5\xd25A~'
+         b'\xa7F\xb7\xdb\x9e\xea\xb3<\xf0\x16t\xb9D\xc6Ea\xce3\x88\xfa\x1a'
+         b'\xbd\x0f\xa8\x8b\x06\xc4L\xe8\x1e"4\xaap\xfeW\x8dE]\xac']
+        ], b'\x00\x00\x00\x00'
+    ],
+    # previous transaction (in block 57043)
+    # too many inputs, just showing outputs
+    [b'\x01\x00\x00\x00', b'\x00', [
+    ], b'\x01', [  # single output
+        [b'\x00\x10\xa5\xd4\xe8\x00\x00\x00', b'\x19',
+         b"v\xa9\x14F\xaf?\xb4\x81\x83\x7f\xad\xbbB\x17'\xf9\x95\x9c-2\xa3"
+         b'h)\x88\xac']
+        ], b'\x00\x00\x00\x00'
+    ]
+) 
 
-class InvalidTransactionError(ValueError):
+class TransactionInvalidError(ValueError):
     pass
 
 class ReservedWordError(ValueError):
@@ -491,7 +533,7 @@ def run(scriptbinary, txnew, parsed, stack=None, checksig_prep=False):
                 logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
                 exec(run_op, {**globals(), **locals()})
             logging.info('script: %r, stack: %s', script, stack)
-    except (InvalidTransactionError, ReservedWordError):
+    except (TransactionInvalidError, ReservedWordError):
         logging.error('script failed or otherwise invalid')
         logging.info('stack: %s', stack)
         stack[:] = []  # empty stack
@@ -500,15 +542,26 @@ def run(scriptbinary, txnew, parsed, stack=None, checksig_prep=False):
     # problem with using `exec` is that it has its own environment
     return stack
 
-def hash256(data):
+# following subroutines are for use from `exec` calls from stack language,
+# hence the odd parameters
+def hash256(stack=None, hashlib=None, **ignored):
     '''
     sha256d hash, which is the hash of a hash
     '''
+    data = stack.pop()
     return hashlib.sha256(hashlib.sha256(data).digest()).digest()
 
+def hash160(stack=None, hashlib=None, **ignored):
+    '''
+    input is hashed twice: first with SHA-256 and then with RIPEMD-160
+    '''
+    data = stack.pop()
+    ripemd160 = hashlib.new('ripemd160')
+    ripemd160.update(hashlib.sha256(data).digest())
+    return ripemd160.digest()
 
 def checksig(stack=None, reference=None, mark=None, parsed=None,
-             txnew=None, **kwargs):
+             txnew=None, **ignored):
     '''
     run OP_CHECKSIG in context of `run` subroutine
 
@@ -537,7 +590,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     txcopy[2][0][2] = bytes([len(subscript)])  # FIXME: assumes single byte
     txcopy[2][0][3] = bytes(subscript)
     serialized = serialize(txcopy) + hashtype_code
-    hashed = hash256(serialized)
+    hashed = hash256(stack=[serialized], hashlib=hashlib)[::-1]
     stack.append(ecdsa_verify(hashed, bytes(signature), pubkey))
 
 def serialize(lists):
@@ -552,6 +605,7 @@ def serialize(lists):
         else:
             logging.debug('assuming %s is bytes', item)
             serialized += item
+    logging.debug('serialized: %s', b2a_hex(serialized))
     return serialized
 
 def test_checksig(current_tx, txin_index, previous_tx):
@@ -581,4 +635,4 @@ def test_checksig(current_tx, txin_index, previous_tx):
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
-    test_checksig(TEST_CHECKSIG[0], 0, TEST_CHECKSIG[1])
+    test_checksig(PIZZA[0], 0, PIZZA[1])

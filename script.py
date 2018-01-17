@@ -87,83 +87,103 @@ SCRIPT_OPS += (
         'pass']
     ),
     (0x62, [
-        'VER',
+        "stack.append('VER')",
         "raise ReservedWordError('reserved opcode 0x62')",
         'pass']
     ),
     (0x63, [
-        'IF',
+        "stack.append('IF')",
         "raise NotImplementedError('OP_IF not yet implemented')",
         'pass']
     ),
     (0x64, [
-        'NOTIF',
+        "stack.append('NOTIF')",
         "raise NotImplementedError('OP_NOTIF not yet implemented')",
         'pass']
     ),
     (0x65, [
-        'VERIF',
+        "stack.append('VERIF')",
         "raise ReservedWordError('reserved opcode 0x65')",
         'pass']
     ),
     (0x66, [
-        'VERNOTIF',
+        "stack.append('VERNOTIF')",
         "raise ReservedWordError('reserved opcode 0x66')",
         'pass']
     ),
     (0x67, [
-        'ELSE',
+        "stack.append('ELSE')",
         "raise NotImplementedError('OP_ELSE not yet implemented')",
         'pass']
     ),
     (0x68, [
-        'ENDIF',
+        "stack.append('ENDIF')",
         "raise NotImplementedError('OP_ENDIF not yet implemented')",
         'pass']
     ),
     (0x69, [
-        'VERIFY',
+        "stack.append('VERIFY')",
         "if not stack.pop(-1): raise TransactionInvalidError('VERIFY failed')",
         'pass']
     ),
     (0x6a, [
-        'RETURN',
+        "stack.append('RETURN')",
         "raise TransactionInvalidError('RETURN')",
         'pass']
     ),
     (0x6b, [
-        'TOALTSTACK',
+        "stack.append('TOALTSTACK')",
         'alstack.append(stack.pop(-1)',
         'pass']
     ),
     (0x6c, [
-        'FROMALTSTACK',
+        "stack.append('FROMALTSTACK')",
         'stack.append(altstack.pop(-1)',
         'pass']
     ),
     (0x6d, [
-        '2DROP',
+        "stack.append('2DROP')",
         'stack[-2:] = []',
         'pass']
     ),
     (0x6e, [
-        '2DUP',
+        "stack.append('2DUP')",
         'stack.extend(stack[-2:])',
         'pass']
     ),
     (0x6f, [
-        '3DUP',
+        "stack.append('3DUP')",
         'stack.extend(stack[-3:])',
         'pass']
     ),
     (0x70, [
-        '2OVER',
+        "stack.append('2OVER')",
         'stack.extend(stack[-4:-2])',
         'pass']
     ),
     (0x71, [
-        '2ROT',
+        "stack.append('2ROT')",
         'stack.extend(stack[-6:-4]); stack[-8:-6] = []',
+        'pass']
+    ),
+    (0x72, [
+        "stack.append('2SWAP')",
+        '_ = stack[-2:], stack[-4:-2] = stack[-4:-2], stack[-2:]',
+        'pass']
+    ),
+    (0x73, [
+        "stack.append('IFDUP')",
+        'if stack[-1]: stack.append(stack[-1])',
+        'pass']
+    ),
+    (0x74, [
+        "stack.append('DEPTH')",
+        'stack.append(len(stack))',
+        'pass']
+    ),
+    (0x75, [
+        "stack.append('DROP')",
+        'stack.pop(-1)',
         'pass']
     ),
     (0x76, [

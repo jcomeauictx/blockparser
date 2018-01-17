@@ -381,7 +381,7 @@ SCRIPT_OPS += (
     ),
     (0xac, [
         "stack.append('CHECKSIG')",
-        'checksig(**{**globals(), **locals()})',
+        "logging.debug('stack: %s', stack); checksig(stack=stack)",
         'pass']
     ),
 )
@@ -507,10 +507,12 @@ def hash256(data):
     return hashlib.sha256(hashlib.sha256(data).digest()).digest()
 
 
-def checksig(**kwargs):
+def checksig(stack=None, reference=None, mark=None):
     '''
     run OP_CHECKSIG in context of `run` subroutine
     '''
+    logging.debug('checksig stack: %s, reference: %s, mark: %s',
+                  stack, reference, mark)
     pubkey = stack.pop(-1)
     signature = stack.pop(-1)
     subscript = reference[mark[-1]:]

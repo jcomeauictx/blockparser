@@ -594,7 +594,8 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     serialized = serialize(txcopy) + hashtype_code
     logging.debug('serialized with hashtype_code: %s', serialized)
     hashed = hash256(stack=[serialized], hashlib=hashlib)[::-1]
-    logging.debug('hashed: %r, stack: %s', hashed, stack)
+    stack.append(hashed)
+    logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
     stack.append(ecdsa_verify(hashed, bytes(signature), pubkey))
     return stack[-1]  # for conventional caller
 

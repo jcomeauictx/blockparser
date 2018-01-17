@@ -2,8 +2,10 @@
 '''
 display and execute bitcoin stack scripts
 '''
-import sys, os, struct, logging
+import sys, os, struct, logging, copy, hashlib
 from binascii import b2a_hex, a2b_hex
+from bitcoin import ecdsa_verify  # cheating for now until I can write my own
+# pip install --user git+https://github.com/jcomeauictx/pybitcointools.git
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # each item in SCRIPT_OPS gives:
@@ -372,9 +374,14 @@ SCRIPT_OPS += (
         'stack.append(stack.pop(0) == stack.pop(0))',
         'pass']
     ),
+    (0xab, [
+        "stack.append('CODESEPARATOR')",
+        'mark.append(len(reference) - len(script) - 1)',
+        'mark.append(len(reference) - len(script) - 1)']
+    ),
     (0xac, [
         "stack.append('CHECKSIG')",
-        'stack.pop(-1); stack[-1] = 1',  # FIXME: simulating success for now
+        'checksig(**{**globals(), **locals()})',
         'pass']
     ),
 )
@@ -431,10 +438,11 @@ def parse(scriptbinary, display=True):
     returns same-sized list of opcodes parsed from script
     '''
     stack = []
-    parsed = []
     opcodes = dict(SCRIPT_OPS)
     script = list(scriptbinary)  # gives list of numbers (`ord`s)
+    parsed = [None] * len(script)
     while script:
+        parsed[-len(script)] = script[0]
         opcode = script.pop(0)
         operation = opcodes.get(opcode, None)
         logging.debug('opcode: %r, operation: %r', opcode, operation)
@@ -450,7 +458,7 @@ def parse(scriptbinary, display=True):
         print('-----')
     return parsed
 
-def run(scriptbinary, parsed, stack=None, checksig_prep=False):
+def run(scriptbinary, txnew, parsed, stack=None, checksig_prep=False):
     '''
     executes scripts the same way (hopefully) as Bitcoin Core would
 
@@ -462,6 +470,7 @@ def run(scriptbinary, parsed, stack=None, checksig_prep=False):
     stack = stack or []  # you can pass in a stack from previous script
     logging.debug('stack at start of run: %s', stack)
     altstack = []
+    mark = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
     for opcode in DISABLED:
         opcodes.pop(opcode)
@@ -491,6 +500,45 @@ def run(scriptbinary, parsed, stack=None, checksig_prep=False):
     # problem with using `exec` is that it has its own environment
     return stack
 
+def hash256(data):
+    '''
+    sha256d hash, which is the hash of a hash
+    '''
+    return hashlib.sha256(hashlib.sha256(data).digest()).digest()
+
+
+def checksig(**kwargs):
+    '''
+    run OP_CHECKSIG in context of `run` subroutine
+    '''
+    pubkey = stack.pop(-1)
+    signature = stack.pop(-1)
+    subscript = reference[mark[-1]:]
+    checker = list(parsed[mark[-1]:])  # for checking for OP_CODESEPARATORs
+    # remove OP_CODESEPARATORs in subscript
+    # only safe way to do this is to work backwards using positive indices
+    for offset in range(len(checker) - 1, 0, -1):
+        if checker[offset] == 0xab:  # OP_CODESEPARATOR
+            checker.pop(offset)
+            subscript.pop(offset)
+    hashtype = signature.pop(-1)
+    hastype_code = struct.pack('<L', hashtype)
+    txcopy = copy.deepcopy(txnew)
+    for input in txcopy[2][1:]:
+        input[2] = b'\0'
+        input.pop(3)
+    txcopy[2][0][2] = bytes([len(subscript)])
+    txcopy[2][0][3] = subscript
+    serialized = serialize(txcopy) + hashtype_code
+    hashed = hash256(serialized)
+    stack.push(ecdsa_verify(hashed, signature, pubkey))
+
+def serialize(lists):
+    '''
+    convert multi-level list to bytestring
+    '''
+    return b''.join([item for sublist in lists for item in sublist])
+
 def test_checksig(current_tx, txin_index, previous_tx):
     '''
     display and run scripts in given transactions to test OP_CHECKSIG
@@ -504,7 +552,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     txin_script = txin[3]
     parsed = parse(txin_script)
     logging.debug('running txin script...')
-    stack = run(txin_script, parsed, stack)
+    stack = run(txin_script, current_tx, parsed, stack)
     logging.debug('stack after running txin script: %s', stack)
     logging.debug('parsing and displaying previous txout script...')
     txout = previous_tx[4]
@@ -512,7 +560,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     parsed = parse(txout_script)
     logging.debug('stack before running txout script: %s', stack)
     logging.debug('running txout script %r...', txout_script)
-    stack = run(txout_script, parsed, stack)
+    stack = run(txout_script, current_tx, parsed, stack)
     result = bool(stack.pop(-1))
     logging.debug('transaction result: %s', ['fail', 'pass'][result])
 

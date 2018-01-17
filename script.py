@@ -381,7 +381,7 @@ SCRIPT_OPS += (
     ),
     (0xac, [
         "stack.append('CHECKSIG')",
-        "logging.debug('stack: %s', stack); checksig(stack=stack)",
+        "checksig(**globals())",
         'pass']
     ),
 )
@@ -507,14 +507,15 @@ def hash256(data):
     return hashlib.sha256(hashlib.sha256(data).digest()).digest()
 
 
-def checksig(stack=None, reference=None, mark=None):
+def checksig(stack=None, reference=None, mark=None, parsed=None,
+             txnew=None, **kwargs):
     '''
     run OP_CHECKSIG in context of `run` subroutine
     '''
     logging.debug('checksig stack: %s, reference: %s, mark: %s',
                   stack, reference, mark)
     pubkey = stack.pop(-1)
-    signature = stack.pop(-1)
+    signature = list(stack.pop(-1))
     subscript = reference[mark[-1]:]
     checker = list(parsed[mark[-1]:])  # for checking for OP_CODESEPARATORs
     # remove OP_CODESEPARATORs in subscript
@@ -524,22 +525,30 @@ def checksig(stack=None, reference=None, mark=None):
             checker.pop(offset)
             subscript.pop(offset)
     hashtype = signature.pop(-1)
-    hastype_code = struct.pack('<L', hashtype)
+    hashtype_code = struct.pack('<L', hashtype)
     txcopy = copy.deepcopy(txnew)
     for input in txcopy[2][1:]:
         input[2] = b'\0'
         input.pop(3)
-    txcopy[2][0][2] = bytes([len(subscript)])
-    txcopy[2][0][3] = subscript
+    txcopy[2][0][2] = bytes([len(subscript)])  # FIXME: assumes single byte
+    txcopy[2][0][3] = bytes(subscript)
     serialized = serialize(txcopy) + hashtype_code
     hashed = hash256(serialized)
-    stack.push(ecdsa_verify(hashed, signature, pubkey))
+    stack.append(ecdsa_verify(hashed, bytes(signature), pubkey))
 
 def serialize(lists):
     '''
     convert multi-level list to bytestring
     '''
-    return b''.join([item for sublist in lists for item in sublist])
+    serialized = b''
+    for item in lists:
+        logging.debug('item: %s', item)
+        if type(item) == list:
+            serialized += serialize(item)
+        else:
+            logging.debug('assuming %s is bytes', item)
+            serialized += item
+    return serialized
 
 def test_checksig(current_tx, txin_index, previous_tx):
     '''

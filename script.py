@@ -511,6 +511,9 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
              txnew=None, **kwargs):
     '''
     run OP_CHECKSIG in context of `run` subroutine
+
+    see https://bitcoin.stackexchange.com/questions/32305/
+     how-does-the-ecdsa-verification-algorithm-work-during-transaction
     '''
     logging.debug('checksig stack: %s, reference: %s, mark: %s',
                   stack, reference, mark)

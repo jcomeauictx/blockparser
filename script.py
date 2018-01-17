@@ -592,7 +592,9 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     txcopy[2][0][2] = bytes([len(subscript)])  # FIXME: assumes single byte
     txcopy[2][0][3] = bytes(subscript)
     serialized = serialize(txcopy) + hashtype_code
+    logging.debug('serialized with hashtype_code: %s', serialized)
     hashed = hash256(stack=[serialized], hashlib=hashlib)[::-1]
+    logging.debug('hashed: %r, stack: %s', hashed, stack)
     stack.append(ecdsa_verify(hashed, bytes(signature), pubkey))
     return stack[-1]  # for conventional caller
 

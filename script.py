@@ -7,6 +7,7 @@ from binascii import b2a_hex, a2b_hex
 # cheating for now until I can write my own
 # pip install --user git+https://github.com/jcomeauictx/python-bitcoinlib.git
 from bitcoin.core.key import CECKey
+from blockparse import next_transaction
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # each item in SCRIPT_OPS gives:
@@ -640,7 +641,26 @@ def test_checksig(current_tx, txin_index, previous_tx):
     result = bool(stack.pop())
     logging.info('transaction result: %s', ['fail', 'pass'][result])
 
+def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+    '''
+    keep testing every script in blockchain until one fails
+    '''
+    transactions = next_transaction(blockfiles, minblock, maxblock)
+    count = 0
+    for transaction in transactions:
+        for txin in transaction[2]:
+            stack = []
+            txin_script = txin[3]
+            parsed = parse(txin_script)
+            stack = run(txin_script, transaction, parsed, stack)
+            result = bool(stack.pop())
+            logging.info('%d scripts executed successfully', count)
+            if not result:
+                raise(TransactionInvalidError('script failed'))
+            count += 1
+
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     for transactions in (PIZZA, FIRST):
         test_checksig(transactions[0], 0, transactions[1])
+    testall()

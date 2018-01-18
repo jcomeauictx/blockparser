@@ -41,6 +41,48 @@ UNPACKER = {
     8: '<Q',
 }
 
+def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+    '''
+    generator that fetches and returns raw blocks out of blockfiles
+    '''
+    minheight, maxheight = int(minblock), int(maxblock)
+    height = 0
+    reversemagic = dict([[value, key] for key, value in MAGIC.items()])
+    for blockfile in blockfiles or DEFAULT:
+        magic = ''
+        index = 0
+        with open(blockfile, 'rb') as datainput:
+            blockdata = datainput.read()  # not necessarily very efficient
+        logging.warning('NOTE: "height" values shown are relative'
+                        ' to start of first file and may include'
+                        ' orphaned blocks')
+        while index < len(blockdata):
+            logging.debug('blockparser at index %d out of %d bytes',
+                          index, len(blockdata))
+            magic = blockdata[index:index + 4]
+            blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
+            blockheader = blockdata[index + 8:index + 88]
+            transactions = blockdata[index + 88:index + blocksize + 8]
+            index += blocksize + 8
+            if minheight <= height <= maxheight:
+                logging.debug('height: %d', height)
+                logging.debug('magic: %s', binascii.b2a_hex(magic))
+                logging.debug('block type: %s', reversemagic.get(
+                             magic, 'unknown'))
+                logging.debug('block size: %d', blocksize)
+                logging.debug('block header: %r', blockheader)
+                logging.debug('transactions (partial): %r', transactions[:80])
+                yield (blockheader, transactions)
+            elif height > maxheight:
+                logging.debug('height %d > maxheight %d', height, maxheight)
+                break  # still executes `height += 1` below!
+            else:
+                logging.debug('height: %d', height)
+            height += 1
+        logging.debug('height: %d, maxheight: %d', height, maxheight)
+        if height > maxheight:
+            break
+
 def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     dump out block files
@@ -74,10 +116,10 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.info('block header: %r', blockheader)
                 parse_blockheader(blockheader)
                 logging.info('transactions (partial): %r', transactions[:80])
-                count, transactions = parse_transactions(transactions)
+                count, data = parse_transactions(transactions)
                 logging.info('transaction count: %d', count)
-                logging.debug('transaction data (partial): %r',
-                              transactions[:80])
+                logging.debug('remainig data (partial): %r',
+                              data[:80])
             elif height > maxheight:
                 logging.debug('height %d > maxheight %d', height, maxheight)
                 break  # still executes `height += 1` below!
@@ -157,9 +199,20 @@ def parse_transactions(data):
     transactions = []
     rawcount, count, data = get_count(data)
     for index in range(count):
-        transaction, data = parse_transaction(data)
-        transactions.append(transaction)
+        raw_transaction, transaction, data = parse_transaction(data)
+        transactions.append(raw_transaction)
     return count, data
+
+def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+    '''
+    iterates over each transaction in every input block
+    '''
+    blocks = nextblock(blockfiles, minblock, maxblock)
+    for header, transactions in blocks:
+        rawcount, count, data = get_count(transactions)
+        for index in range(count):
+            raw_transaction, transaction, data = parse_transaction(data)
+            yield transaction
 
 def parse_transaction(data):
     '''
@@ -183,10 +236,11 @@ def parse_transaction(data):
     logging.info('lock time: %s', to_hex(lock_time))
     logging.debug('raw transaction (%d bytes): %s',
                   len(raw_transaction), to_hex(raw_transaction))
-    logging.debug('raw transaction split: %s', [
-        version, raw_in_count, inputs, raw_out_count, outputs, lock_time])
+    transaction = [version, raw_in_count, inputs, raw_out_count,
+                   outputs, lock_time]
+    logging.debug('raw transaction split: %s', transaction)
     logging.info('transaction hash: %s', show_hash(get_hash(raw_transaction)))
-    return raw_transaction, data
+    return raw_transaction, transaction, data
 
 def parse_inputs(count, data):
     '''

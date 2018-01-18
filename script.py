@@ -668,7 +668,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                     logging.debug('comparing %r and %r', search_hash, tx_hash)
                     if search_hash == tx_hash:
                         logging.debug('found previous tx')
-                        txout_script = tx[tx_index][2]
+                        txout_script = tx[4][tx_index][2]
                         parsed = parse(txout_script)
                         # still using stack from above txin_script
                         stack = run(txout_script, tx, parsed, stack)

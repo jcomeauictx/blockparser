@@ -590,8 +590,13 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     for input in txcopy[2][1:]:
         input[2] = b'\0'
         input.pop(3)
-    txcopy[2][0][2] = bytes([len(subscript)])  # FIXME: assumes single byte
-    txcopy[2][0][3] = bytes(subscript)
+    try:
+        txcopy[2][0][2] = bytes([len(subscript)])  # FIXME: assumes single byte
+        txcopy[2][0][3] = bytes(subscript)
+    except TypeError:
+        logging.error('txcopy: %r, txcopy[2]: %r, txcopy[2][0]: %r',
+                      txcopy, txcopy[2], txcopy[2][0])
+        raise
     serialized = serialize(txcopy) + hashtype_code
     logging.debug('serialized with hashtype_code: %s', serialized)
     hashed = hash256(stack=[serialized], hashlib=hashlib)
@@ -671,7 +676,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                         txout_script = tx[4][tx_index][2]
                         parsed = parse(txout_script)
                         # still using stack from above txin_script
-                        stack = run(txout_script, tx, parsed, stack)
+                        stack = run(txout_script, txin, parsed, stack)
                         result = bool(stack.pop())
                         logging.info('%d scripts executed successfully', count)
                         if not result:

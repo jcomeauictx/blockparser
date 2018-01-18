@@ -1,11 +1,12 @@
-#!/usr/bin/python3
+#!/usr/bin/python3 -OO
 '''
 display and execute bitcoin stack scripts
 '''
 import sys, os, struct, logging, copy, hashlib
 from binascii import b2a_hex, a2b_hex
-from bitcoin import ecdsa_verify  # cheating for now until I can write my own
-# pip install --user git+https://github.com/jcomeauictx/pybitcointools.git
+# cheating for now until I can write my own
+# pip install --user git+https://github.com/jcomeauictx/python-bitcoinlib.git
+from bitcoin.core.key import CECKey
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # each item in SCRIPT_OPS gives:
@@ -567,8 +568,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     '''
     run OP_CHECKSIG in context of `run` subroutine
 
-    see https://bitcoin.stackexchange.com/questions/32305/
-     how-does-the-ecdsa-verification-algorithm-work-during-transaction and
+    see https://bitcoin.stackexchange.com/a/32308/3758 and
     http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html
     '''
     logging.debug('checksig stack: %s, reference: %s, mark: %s',
@@ -594,9 +594,10 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     serialized = serialize(txcopy) + hashtype_code
     logging.debug('serialized with hashtype_code: %s', serialized)
     hashed = hash256(stack=[serialized], hashlib=hashlib)[::-1]
-    stack.append(hashed)
     logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
-    stack.append(ecdsa_verify(hashed, bytes(signature), pubkey))
+    key = CECKey()
+    key.set_pubkey(pubkey)
+    stack.append(key.verify(hashed, bytes(signature)))
     return stack[-1]  # for conventional caller
 
 def serialize(lists):
@@ -637,7 +638,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     logging.debug('running txout script %r...', txout_script)
     stack = run(txout_script, current_tx, parsed, stack)
     result = bool(stack.pop())
-    logging.debug('transaction result: %s', ['fail', 'pass'][result])
+    logging.info('transaction result: %s', ['fail', 'pass'][result])
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG

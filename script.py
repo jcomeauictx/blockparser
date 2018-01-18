@@ -642,4 +642,5 @@ def test_checksig(current_tx, txin_index, previous_tx):
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
-    test_checksig(PIZZA[0], 0, PIZZA[1])
+    for transactions in (PIZZA, FIRST):
+        test_checksig(transactions[0], 0, transactions[1])

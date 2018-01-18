@@ -121,8 +121,7 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.info('transactions (partial): %r', transactions[:80])
                 count, data = parse_transactions(transactions)
                 logging.info('transaction count: %d', count)
-                logging.debug('remainig data (partial): %r',
-                              data[:80])
+                logging.debug('remaining data (partial): %r', data[:80])
             elif height > maxheight:
                 logging.debug('height %d > maxheight %d', height, maxheight)
                 break  # still executes `height += 1` below!

@@ -612,7 +612,7 @@ def serialize(lists):
     '''
     serialized = b''
     for item in lists:
-        #logging.debug('item: %s', item)
+        logging.debug('serializing item: %s', item)
         if type(item) == list:
             serialized += serialize(item)
         else:

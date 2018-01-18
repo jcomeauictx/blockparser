@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -OO
 '''
-rewriting parser.cpp in Python3
+writing parser.cpp replacement in Python3
 
 using ideas and code from
 http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html,
@@ -8,6 +8,9 @@ http://www.righto.com/2014/02/bitcoin-mining-hard-way-algorithms.html,
 https://bitcoin.org/en/developer-guide,
 https://bitcoin.org/en/developer-reference,
 and many other sources.
+
+it won't work the same but has the same general purpose, to present block
+files in a readable format.
 '''
 from __future__ import division, print_function
 import sys, os, struct, binascii, logging, hashlib
@@ -326,6 +329,23 @@ def get_count(data):
     raw_count, data = data[:offset + length], data[offset + length:]
     logging.debug('length of data after get_count: %d', len(data))
     return raw_count, count, data
+
+def varint_length(data):
+    r'''
+    create new VarInt count of raw data
+    
+    >>> varint_length('\0' * 512)
+    b'\xfd\x00\x02'
+    '''
+    length = len(data)
+    if length < 0xfd:
+        return bytes([length])
+    elif length <= 0xffff:
+        return b'\xfd' + struct.pack('<H', length)
+    elif length <= 0xffffffff:
+        return b'\xfe' + struct.pack('<L', length)
+    else:  # will throw struct.error if above quad range
+        return b'\xff' + struct.pack('<Q', length)
 
 if __name__ == '__main__':
     parse((sys.argv + [None])[1], *sys.argv[2:])

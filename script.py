@@ -7,7 +7,7 @@ from binascii import b2a_hex, a2b_hex
 # cheating for now until I can write my own
 # pip install --user git+https://github.com/jcomeauictx/python-bitcoinlib.git
 from bitcoin.core.key import CECKey
-from blockparse import next_transaction
+from blockparse import next_transaction, varint_length
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # each item in SCRIPT_OPS gives:
@@ -591,7 +591,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
         input[2] = b'\0'
         input.pop(3)
     try:
-        txcopy[2][0][2] = bytes([len(subscript)])  # FIXME: assumes single byte
+        txcopy[2][0][2] = varint_length(subscript)
         txcopy[2][0][3] = bytes(subscript)
     except TypeError:
         logging.error('txcopy: %r, txcopy[2]: %r, txcopy[2][0]: %r',
@@ -612,11 +612,11 @@ def serialize(lists):
     '''
     serialized = b''
     for item in lists:
-        logging.debug('item: %s', item)
+        #logging.debug('item: %s', item)
         if type(item) == list:
             serialized += serialize(item)
         else:
-            logging.debug('assuming %s is bytes', item)
+            #logging.debug('assuming %s is bytes', item)
             serialized += item
     logging.debug('serialized: %s', b2a_hex(serialized))
     return serialized
@@ -676,12 +676,13 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                         txout_script = tx[4][tx_index][2]
                         parsed = parse(txout_script)
                         # still using stack from above txin_script
-                        stack = run(txout_script, txin, parsed, stack)
+                        stack = run(txout_script, transaction, parsed, stack)
                         result = bool(stack.pop())
                         logging.info('%d scripts executed successfully', count)
                         if not result:
                             raise(TransactionInvalidError('script failed'))
                         count += 1
+                        break  # out of inner loop
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG

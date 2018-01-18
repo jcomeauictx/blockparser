@@ -645,22 +645,41 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     keep testing every script in blockchain until one fails
     '''
+    coinbase = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
     transactions = next_transaction(blockfiles, minblock, maxblock)
     count = 0
-    for transaction in transactions:
+    for hash_ignored, transaction in transactions:
         for txin in transaction[2]:
             stack = []
             txin_script = txin[3]
             parsed = parse(txin_script)
             stack = run(txin_script, transaction, parsed, stack)
-            result = bool(stack.pop())
+            result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)
             if not result:
                 raise(TransactionInvalidError('script failed'))
             count += 1
+            tx_hash = txin[0]
+            if tx_hash != coinbase:
+                logging.debug('non-coinbase transaction')
+                tx_index = struct.unpack('<L', txin[1])[0]
+                tx_search = next_transaction(blockfiles)
+                for search_hash, tx in tx_search:
+                    logging.debug('comparing %r and %r', search_hash, tx_hash)
+                    if search_hash == tx_hash:
+                        logging.debug('found previous tx')
+                        txout_script = tx[tx_index][2]
+                        parsed = parse(txout_script)
+                        # still using stack from above txin_script
+                        stack = run(txout_script, tx, parsed, stack)
+                        result = bool(stack.pop())
+                        logging.info('%d scripts executed successfully', count)
+                        if not result:
+                            raise(TransactionInvalidError('script failed'))
+                        count += 1
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     for transactions in (PIZZA, FIRST):
         test_checksig(transactions[0], 0, transactions[1])
-    testall()
+    testall(*sys.argv[1:])

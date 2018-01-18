@@ -212,7 +212,8 @@ def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
         rawcount, count, data = get_count(transactions)
         for index in range(count):
             raw_transaction, transaction, data = parse_transaction(data)
-            yield transaction
+            txhash = get_hash(raw_transaction)
+            yield txhash, transaction
 
 def parse_transaction(data):
     '''

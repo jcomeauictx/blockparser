@@ -593,7 +593,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     txcopy[2][0][3] = bytes(subscript)
     serialized = serialize(txcopy) + hashtype_code
     logging.debug('serialized with hashtype_code: %s', serialized)
-    hashed = hash256(stack=[serialized], hashlib=hashlib)[::-1]
+    hashed = hash256(stack=[serialized], hashlib=hashlib)
     logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
     key = CECKey()
     key.set_pubkey(pubkey)

@@ -611,6 +611,7 @@ def serialize(lists):
     convert multi-level list to bytestring
     '''
     serialized = b''
+    logging.debug('serializing object: %s', lists)
     for item in lists:
         logging.debug('serializing item: %s', item)
         if type(item) == list:
@@ -672,7 +673,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 for search_hash, tx in tx_search:
                     logging.debug('comparing %r and %r', search_hash, tx_hash)
                     if search_hash == tx_hash:
-                        logging.debug('found previous tx')
+                        logging.debug('found previous tx: %r', tx)
                         txout_script = tx[4][tx_index][2]
                         parsed = parse(txout_script)
                         # still using stack from above txin_script

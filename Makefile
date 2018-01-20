@@ -40,4 +40,6 @@ parser: $(OBJS)
 clean:
 	-rm -r -f *.o *.i .objs .deps *.d parser
 
+%.test: %.py
+	python3 ./$<
 -include .deps/*

@@ -502,7 +502,7 @@ def parse(scriptbinary, display=True):
         print('-----')
     return parsed
 
-def run(scriptbinary, txnew, parsed, stack=None):
+def run(scriptbinary, txnew, txindex, parsed, stack=None):
     '''
     executes scripts the same way (hopefully) as Bitcoin Core would
 
@@ -562,7 +562,7 @@ def hash160(stack=None, hashlib=None, **ignored):
     return stack[-1]  # for conventional caller
 
 def checksig(stack=None, reference=None, mark=None, parsed=None,
-             txnew=None, **ignored):
+             txnew=None, txindex=None, **ignored):
     '''
     run OP_CHECKSIG in context of `run` subroutine
 
@@ -584,12 +584,13 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     hashtype = signature.pop()
     hashtype_code = struct.pack('<L', hashtype)
     txcopy = copy.deepcopy(txnew)
-    for input in txcopy[2][1:]:
+    for input in txcopy[2]:
         input[2] = b'\0'
-        input.pop(3)
+        input[3] = b''
     try:
-        txcopy[2][0][2] = varint_length(subscript)
-        txcopy[2][0][3] = bytes(subscript)
+        logging.debug('replacing input script %d with subscript', txindex)
+        txcopy[2][txindex][2] = varint_length(subscript)
+        txcopy[2][txindex][3] = bytes(subscript)
     except TypeError:
         logging.error('txcopy: %r, txcopy[2]: %r, txcopy[2][0]: %r',
                       txcopy, txcopy[2], txcopy[2][0])
@@ -632,7 +633,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     txin_script = txin[3]
     parsed = parse(txin_script)
     logging.debug('running txin script...')
-    stack = run(txin_script, current_tx, parsed, stack)
+    stack = run(txin_script, current_tx, txin_index, parsed, stack)
     logging.debug('stack after running txin script: %s', stack)
     logging.debug('parsing and displaying previous txout script...')
     txout = previous_tx[4]
@@ -640,7 +641,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     parsed = parse(txout_script)
     logging.debug('stack before running txout script: %s', stack)
     logging.debug('running txout script %r...', txout_script)
-    stack = run(txout_script, current_tx, parsed, stack)
+    stack = run(txout_script, current_tx, txin_index, parsed, stack)
     result = bool(stack.pop())
     logging.info('transaction result: %s', ['fail', 'pass'][result])
 
@@ -650,13 +651,14 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     coinbase = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
     transactions = next_transaction(blockfiles, minblock, maxblock)
-    count = 0
+    spendcount, count = 0, 0
     for hash_ignored, transaction in transactions:
-        for txin in transaction[2]:
+        for txindex in range(len(transaction[2])):
+            txin = transaction[2][txindex]
             stack = []
             txin_script = txin[3]
             parsed = parse(txin_script)
-            stack = run(txin_script, transaction, parsed, stack)
+            stack = run(txin_script, transaction, txindex, parsed, stack)
             result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)
             if not result:
@@ -665,21 +667,24 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             tx_hash = txin[0]
             if tx_hash != coinbase:
                 logging.debug('non-coinbase transaction')
-                tx_index = struct.unpack('<L', txin[1])[0]
+                txout_index = struct.unpack('<L', txin[1])[0]
                 tx_search = next_transaction(blockfiles)
                 for search_hash, tx in tx_search:
                     logging.debug('comparing %r and %r', search_hash, tx_hash)
                     if search_hash == tx_hash:
                         logging.debug('found previous tx: %r', tx)
-                        txout_script = tx[4][tx_index][2]
+                        txout_script = tx[4][txout_index][2]
                         parsed = parse(txout_script)
                         # still using stack from above txin_script
-                        stack = run(txout_script, transaction, parsed, stack)
+                        stack = run(txout_script, transaction, txindex,
+                                    parsed, stack)
                         result = bool(stack.pop())
                         logging.info('%d scripts executed successfully', count)
+                        logging.info('%d of those were spends', spendcount)
                         if not result:
                             raise(TransactionInvalidError('script failed'))
                         count += 1
+                        spendcount += 1
                         break  # out of inner loop
 
 if __name__ == '__main__':

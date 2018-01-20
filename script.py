@@ -502,14 +502,11 @@ def parse(scriptbinary, display=True):
         print('-----')
     return parsed
 
-def run(scriptbinary, txnew, parsed, stack=None, checksig_prep=False):
+def run(scriptbinary, txnew, parsed, stack=None):
     '''
     executes scripts the same way (hopefully) as Bitcoin Core would
 
     showing stack at end of each operation
-
-    if instead checksig_prep is True, only returns copy of script with
-    OP_CODESEPARATORs removed; does not run anything
     '''
     stack = stack or []  # you can pass in a stack from previous script
     logging.debug('stack at start of run: %s', stack)

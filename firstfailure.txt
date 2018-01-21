@@ -1,0 +1,30 @@
+I wasn't counting on a transaction designed to fail...
+
+INFO:root:transaction version: 0x00000001 (1)
+INFO:root:number of transaction inputs: 1
+INFO:root:txin previous txout hash: b'0000000000000000000000000000000000000000000000000000000000000000'
+INFO:root:txin previous txout index: 0xffffffff (4294967295)
+INFO:root:txin script: b'\x04Vr\x0e\x1b\x00'
+INFO:root:txin sequence number: 0xffffffff (4294967295)
+INFO:root:number of transaction outputs: 1
+INFO:root:txout value: 50.00000000
+INFO:root:txout script: b'A\x04Le\x8b;Ja\x97\xdd\xe4s\x00.\xd9;\xfa\x99\x8cG\xe4\x8f\x9dq\xa5\x11\x16I\xccT-\xd8#\xa4\x94x\xa3\xf9\xa5\xbc\xb3\xaaI\xf6\xf8WZa\xc2\x8e_E\xd0\xe2\xed\xbd\x16\xc9\xce\x03\xb1?YB\x8fv\xac'
+INFO:root:lock time: b'00000000'
+INFO:root:transaction hash: b'6cca5df02351e3049f99276d451859172d5e7823a7342b0c028dfbb881f45c50'
+INFO:root:height: 91713
+b'56720e1b'
+FALSE
+-----
+INFO:root:`exec`ing operation 0x4, stack.append(bytes([script.pop(0) for i in range(opcode)]))
+INFO:root:script: [0], stack: [b'Vr\x0e\x1b']
+INFO:root:`exec`ing operation 0x0, stack.append(b'')
+INFO:root:script: [], stack: [b'Vr\x0e\x1b', b'']
+INFO:root:193409 scripts executed successfully
+Traceback (most recent call last):
+  File "./script.py", line 728, in <module>
+    testall(*sys.argv[1:])
+  File "./script.py", line 682, in testall
+    raise(TransactionInvalidError('script failed'))
+__main__.TransactionInvalidError: script failed
+Makefile:46: recipe for target 'script.run' failed
+make: *** [script.run] Error 1

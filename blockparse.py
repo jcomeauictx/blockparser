@@ -51,7 +51,8 @@ def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     minheight, maxheight = int(minblock), int(maxblock)
     height = 0
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
-    for blockfile in blockfiles or DEFAULT:
+    blockfiles = [blockfiles] if blockfiles else DEFAULT
+    for blockfile in blockfiles:
         magic = ''
         index = 0
         with open(blockfile, 'rb') as datainput:
@@ -94,7 +95,8 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
     height = 0
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
-    for blockfile in blockfiles or DEFAULT:
+    blockfiles = [blockfiles] if blockfiles else DEFAULT
+    for blockfile in blockfiles:
         magic = ''
         index = 0
         with open(blockfile, 'rb') as datainput:
@@ -209,6 +211,7 @@ def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     iterates over each transaction in every input block
     '''
+    blockfiles = [blockfiles] if blockfiles else DEFAULT
     blocks = nextblock(blockfiles, minblock, maxblock)
     for height, header, transactions in blocks:
         rawcount, count, data = get_count(transactions)

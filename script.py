@@ -536,7 +536,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     except (TransactionInvalidError, ReservedWordError) as failed:
         logging.error('script failed or otherwise invalid: %s', failed)
         logging.info('stack: %s', stack)
-        stack.append(False)
+        stack.append(None)
     logging.debug('run leaves stack at: %s', stack)
     # need to actually pass the stack back to caller...
     # problem with using `exec` is that it has its own environment
@@ -679,12 +679,10 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             stack = run(txin_script, transaction, txindex, parsed, stack)
             result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)
-            if not result:
-                if readable[-1] in ('FALSE', 'RETURN'):
-                    logging.info('input script %s was programmed to fail',
-                                 readable)
-                else:
-                    raise(TransactionInvalidError('input script failed'))
+            if result is None:
+                raise(TransactionInvalidError('input script failed'))
+            else:
+                logging.info('input script %s was programmed to fail', readable)
             count += 1
             previous_hash = txin[0]
             if previous_hash != coinbase:
@@ -699,12 +697,11 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 result = bool(stack.pop())
                 logging.info('%d scripts executed successfully', count)
                 logging.info('%d of those were spends', spendcount)
-                if not result:
-                    if readable[-1] in ('FALSE', 'RETURN'):
-                        logging.info('output script %s was programmed to fail',
-                                     readable)
-                    else:
-                        raise(TransactionInvalidError('output script failed'))
+                if result is None:
+                    raise(TransactionInvalidError('output script failed'))
+                else:
+                    logging.info('output script %s was programmed to fail',
+                                 readable)
                 count += 1
                 spendcount += 1
                 break  # out of inner loop

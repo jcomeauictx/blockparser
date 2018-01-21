@@ -662,6 +662,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     lastheight = 0
     coinbase = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
+    blockfiles = [blockfiles] if blockfiles else None
     transactions = next_transaction(blockfiles, minblock, maxblock)
     spendcount, count = 0, 0
     cache = OrderedDict()
@@ -733,4 +734,4 @@ if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     for transactions in (PIZZA, FIRST):
         test_checksig(transactions[0], 0, transactions[1])
-    testall(*sys.argv[1:])
+    testall((sys.argv + [None])[1], *sys.argv[2:])

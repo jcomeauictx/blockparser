@@ -51,10 +51,11 @@ def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     minheight, maxheight = int(minblock), int(maxblock)
     height = 0
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
-    blockfiles = [blockfiles] if blockfiles else DEFAULT
+    blockfiles = blockfiles or DEFAULT
     for blockfile in blockfiles:
         magic = ''
         index = 0
+        logging.debug('blockfile "%s" of blockfiles %s', blockfile, blockfiles)
         with open(blockfile, 'rb') as datainput:
             blockdata = datainput.read()  # not necessarily very efficient
         logging.warning('NOTE: "height" values shown are relative'
@@ -96,6 +97,7 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     height = 0
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
     blockfiles = [blockfiles] if blockfiles else DEFAULT
+    # if file was specified on commandline, make it into a list
     for blockfile in blockfiles:
         magic = ''
         index = 0
@@ -211,7 +213,8 @@ def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     iterates over each transaction in every input block
     '''
-    blockfiles = [blockfiles] if blockfiles else DEFAULT
+    logging.debug('blockfiles: %s', blockfiles)
+    blockfiles = blockfiles or DEFAULT
     blocks = nextblock(blockfiles, minblock, maxblock)
     for height, header, transactions in blocks:
         rawcount, count, data = get_count(transactions)

@@ -42,4 +42,6 @@ clean:
 
 %.test: %.py
 	python3 ./$<
+%.run: %.py
+	./$<
 -include .deps/*

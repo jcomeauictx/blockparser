@@ -498,10 +498,10 @@ def parse(scriptbinary, display=True):
             logging.debug('`exec`ing 0x%x, %s', opcode, display_op)
             exec(display_op, {**globals(), **locals()})
     if display:
-        while stack:
-            print(stack.pop(0))
+        for index in range(len(stack)):
+            print(stack[index])
         print('-----')
-    return parsed
+    return parsed, stack
 
 def run(scriptbinary, txnew, txindex, parsed, stack=None):
     '''
@@ -642,16 +642,16 @@ def test_checksig(current_tx, txin_index, previous_tx):
     logging.debug('previous tx hash: %s', b2a_hex(txin[0]))
     txout_index = struct.unpack('<L', txin[1])[0]
     txin_script = txin[3]
-    parsed = parse(txin_script)
-    logging.debug('running txin script...')
+    parsed, readable = parse(txin_script)
+    logging.debug('running txin script %s', readable)
     stack = run(txin_script, current_tx, txin_index, parsed, stack)
     logging.debug('stack after running txin script: %s', stack)
     logging.debug('parsing and displaying previous txout script...')
     txout = previous_tx[4]
     txout_script = txout[txout_index][2]
-    parsed = parse(txout_script)
+    parsed, readable = parse(txout_script)
     logging.debug('stack before running txout script: %s', stack)
-    logging.debug('running txout script %r...', txout_script)
+    logging.debug('running txout script %s', readable)
     stack = run(txout_script, current_tx, txin_index, parsed, stack)
     result = bool(stack.pop())
     logging.info('transaction result: %s', ['fail', 'pass'][result])
@@ -674,12 +674,16 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             txin = transaction[2][txindex]
             stack = []
             txin_script = txin[3]
-            parsed = parse(txin_script)
+            parsed, readable = parse(txin_script, display=False)
             stack = run(txin_script, transaction, txindex, parsed, stack)
             result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)
             if not result:
-                raise(TransactionInvalidError('script failed'))
+                if readable[-1] in ('FALSE', 'RETURN'):
+                    logging.info('input script %s was programmed to fail',
+                                 readable)
+                else:
+                    raise(TransactionInvalidError('input script failed'))
             count += 1
             previous_hash = txin[0]
             if previous_hash != coinbase:
@@ -687,7 +691,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 txout_index = struct.unpack('<L', txin[1])[0]
                 tx = silent_search(blockfiles, previous_hash, cache)
                 txout_script = tx[4][txout_index][2]
-                parsed = parse(txout_script)
+                parsed, readable = parse(txout_script, display=False)
                 # still using stack from above txin_script
                 stack = run(txout_script, transaction, txindex,
                             parsed, stack)
@@ -695,7 +699,11 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.info('%d scripts executed successfully', count)
                 logging.info('%d of those were spends', spendcount)
                 if not result:
-                    raise(TransactionInvalidError('script failed'))
+                    if readable[-1] in ('FALSE', 'RETURN'):
+                        logging.info('output script %s was programmed to fail',
+                                     readable)
+                    else:
+                        raise(TransactionInvalidError('output script failed'))
                 count += 1
                 spendcount += 1
                 break  # out of inner loop

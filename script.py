@@ -8,6 +8,7 @@ from binascii import b2a_hex, a2b_hex
 # pip install --user git+https://github.com/jcomeauictx/python-bitcoinlib.git
 from bitcoin.core.key import CECKey
 from blockparse import next_transaction, varint_length
+from collections import OrderedDict
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # each item in SCRIPT_OPS gives:
@@ -663,7 +664,9 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     coinbase = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
     transactions = next_transaction(blockfiles, minblock, maxblock)
     spendcount, count = 0, 0
-    for height, hash_ignored, transaction in transactions:
+    cache = OrderedDict()
+    for height, tx_hash, transaction in transactions:
+        cache[tx_hash] = transaction
         if height != lastheight:
             logging.info('height: %d', height)
             lastheight = height
@@ -678,28 +681,43 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             if not result:
                 raise(TransactionInvalidError('script failed'))
             count += 1
-            tx_hash = txin[0]
-            if tx_hash != coinbase:
+            previous_hash = txin[0]
+            if previous_hash != coinbase:
                 logging.debug('non-coinbase transaction')
                 txout_index = struct.unpack('<L', txin[1])[0]
-                tx_search = next_transaction(blockfiles)
-                for ignored, search_hash, tx in tx_search:
-                    logging.debug('comparing %r and %r', search_hash, tx_hash)
-                    if search_hash == tx_hash:
-                        logging.debug('found previous tx: %r', tx)
-                        txout_script = tx[4][txout_index][2]
-                        parsed = parse(txout_script)
-                        # still using stack from above txin_script
-                        stack = run(txout_script, transaction, txindex,
-                                    parsed, stack)
-                        result = bool(stack.pop())
-                        logging.info('%d scripts executed successfully', count)
-                        logging.info('%d of those were spends', spendcount)
-                        if not result:
-                            raise(TransactionInvalidError('script failed'))
-                        count += 1
-                        spendcount += 1
-                        break  # out of inner loop
+                tx = silent_search(blockfiles, previous_hash, cache)
+                txout_script = tx[4][txout_index][2]
+                parsed = parse(txout_script)
+                # still using stack from above txin_script
+                stack = run(txout_script, transaction, txindex,
+                            parsed, stack)
+                result = bool(stack.pop())
+                logging.info('%d scripts executed successfully', count)
+                logging.info('%d of those were spends', spendcount)
+                if not result:
+                    raise(TransactionInvalidError('script failed'))
+                count += 1
+                spendcount += 1
+                break  # out of inner loop
+
+def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
+    '''
+    returns transaction out of cache if present
+
+    otherwise runs a "silent" search of blockfiles and adds it to the cache
+    '''
+    if search_hash in cache:
+        return cache.pop(search_hash)  # no longer needed in cache
+    else:
+        tx_search = next_transaction(blockfiles)
+        for ignored, found_hash, tx in tx_search:
+            logging.debug('comparing %r and %r', search_hash, found_hash)
+            if search_hash == found_hash:
+                logging.debug('found previous tx: %r', tx)
+                cache[search_hash] = tx
+                if len(cache) > maxlength:
+                    cache.pop(list(cache.keys())[0])
+                return tx
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG

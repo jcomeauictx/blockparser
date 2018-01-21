@@ -2,7 +2,7 @@
 '''
 display and execute bitcoin stack scripts
 '''
-import sys, os, struct, logging, copy, hashlib
+import sys, os, struct, logging, copy, hashlib, re
 from binascii import b2a_hex, a2b_hex
 # cheating for now until I can write my own
 # pip install --user git+https://github.com/jcomeauictx/python-bitcoinlib.git
@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 #  the Python code to be `exec`d in the context of an inactive IF-ELSE branch;
 SCRIPT_OPS = (
     (0x00, [
-        "stack.append('FALSE')",
+        'FALSE',
         "stack.append(b'')",
         'pass']
     ),
@@ -68,12 +68,12 @@ SCRIPT_OPS += (
         'pass']
     ),
     (0x50, [
-        "stack.append('RESERVED')",
+        'RESERVED',
         "raise ReservedWordError('reserved opcode 0x50')",
         'pass']
     ),
     (0x51, [
-        "stack.append('TRUE')",
+        'TRUE',
         'stack.append(1)',
         'pass']
     )
@@ -87,313 +87,313 @@ SCRIPT_OPS += tuple(  # 0x52 - 0x60 are OP_2 through OP_16
 )
 SCRIPT_OPS += (
     (0x61, [
-        "stack.append('NOP')",
+        'NOP',
         'pass',
         'pass']
     ),
     (0x62, [
-        "stack.append('VER')",
+        'VER',
         "raise ReservedWordError('reserved opcode 0x62')",
         'pass']
     ),
     (0x63, [
-        "stack.append('IF')",
+        'IF',
         "raise NotImplementedError('OP_IF not yet implemented')",
         'pass']
     ),
     (0x64, [
-        "stack.append('NOTIF')",
+        'NOTIF',
         "raise NotImplementedError('OP_NOTIF not yet implemented')",
         'pass']
     ),
     (0x65, [
-        "stack.append('VERIF')",
+        'VERIF',
         "raise ReservedWordError('reserved opcode 0x65')",
         'pass']
     ),
     (0x66, [
-        "stack.append('VERNOTIF')",
+        'VERNOTIF',
         "raise ReservedWordError('reserved opcode 0x66')",
         'pass']
     ),
     (0x67, [
-        "stack.append('ELSE')",
+        'ELSE',
         "raise NotImplementedError('OP_ELSE not yet implemented')",
         'pass']
     ),
     (0x68, [
-        "stack.append('ENDIF')",
+        'ENDIF',
         "raise NotImplementedError('OP_ENDIF not yet implemented')",
         'pass']
     ),
     (0x69, [
-        "stack.append('VERIFY')",
+        'VERIFY',
         "if not stack.pop(): raise TransactionInvalidError('VERIFY failed')",
         'pass']
     ),
     (0x6a, [
-        "stack.append('RETURN')",
+        'RETURN',
         "raise TransactionInvalidError('RETURN')",
         'pass']
     ),
     (0x6b, [
-        "stack.append('TOALTSTACK')",
+        'TOALTSTACK',
         'alstack.append(stack.pop()',
         'pass']
     ),
     (0x6c, [
-        "stack.append('FROMALTSTACK')",
+        'FROMALTSTACK',
         'stack.append(altstack.pop()',
         'pass']
     ),
     (0x6d, [
-        "stack.append('2DROP')",
+        '2DROP',
         'stack[-2:] = []',
         'pass']
     ),
     (0x6e, [
-        "stack.append('2DUP')",
+        '2DUP',
         'stack.extend(stack[-2:])',
         'pass']
     ),
     (0x6f, [
-        "stack.append('3DUP')",
+        '3DUP',
         'stack.extend(stack[-3:])',
         'pass']
     ),
     (0x70, [
-        "stack.append('2OVER')",
+        '2OVER',
         'stack.extend(stack[-4:-2])',
         'pass']
     ),
     (0x71, [
-        "stack.append('2ROT')",
+        '2ROT',
         'stack.extend(stack[-6:-4]); stack[-8:-6] = []',
         'pass']
     ),
     (0x72, [
-        "stack.append('2SWAP')",
+        '2SWAP',
         '_ = stack[-2:], stack[-4:-2] = stack[-4:-2], stack[-2:]',
         'pass']
     ),
     (0x73, [
-        "stack.append('IFDUP')",
+        'IFDUP',
         'if stack[-1]: stack.append(stack[-1])',
         'pass']
     ),
     (0x74, [
-        "stack.append('DEPTH')",
+        'DEPTH',
         'stack.append(len(stack))',
         'pass']
     ),
     (0x75, [
-        "stack.append('DROP')",
+        'DROP',
         'stack.pop()',
         'pass']
     ),
     (0x76, [
-        "stack.append('DUP')",
+        'DUP',
         'stack.append(stack[-1])',
         'pass']
     ),
     (0x77, [
-        "stack.append('NIP')",
+        'NIP',
         'stack.pop(-2)',
         'pass']
     ),
     (0x78, [
-        "stack.append('OVER')",
+        'OVER',
         'stack.append(stack[-2])',
         'pass']
     ),
     (0x79, [
-        "stack.append('PICK')",
+        'PICK',
         'stack.append(stack[-1 - stack.pop())]',
         'pass']
     ),
     (0x7a, [
-        "stack.append('ROLL')",
+        'ROLL',
         'stack.append(stack.pop(stack[-1 - stack.pop()]))',
         'pass']
     ),
     (0x7b, [
-        "stack.append('ROT')",
+        'ROT',
         'stack.append(stack.pop(-3))',
         'pass']
     ),
     (0x7c, [
-        "stack.append('SWAP')",
+        'SWAP',
         'stack.append(stack.pop(-2))',
         'pass']
     ),
     (0x7d, [
-        "stack.append('TUCK')",
+        'TUCK',
         'stack.insert(-2, stack[-1])',
         'pass']
     ),
     (0x80, [
-        "stack.append('LEFT')",
+        'LEFT',
         'stack.append(stack.pop(-2)[:stack.pop()])',
         'pass']
     ),
     (0x81, [
-        "stack.append('RIGHT')",
+        'RIGHT',
         'stack.append(stack.pop(-2)[stack.pop() - 1:])',
         'pass']
     ),
     (0x82, [
-        "stack.append('SIZE')",
+        'SIZE',
         'stack.append(len(stack[-1]))',
         'pass']
     ),
     (0x83, [
-        "stack.append('INVERT')",
+        'INVERT',
         'stack[-1] = ~stack[-1]',
         'pass']
     ),
     (0x84, [
-        "stack.append('AND')",
+        'AND',
         'stack.append(stack.pop() & stack.pop())',
         'pass']
     ),
     (0x85, [
-        "stack.append('OR')",
+        'OR',
         'stack.append(stack.pop() | stack.pop())',
         'pass']
     ),
     (0x86, [
-        "stack.append('XOR')",
+        'XOR',
         'stack.append(stack.pop() ^ stack.pop())',
         'pass']
     ),
     (0x87, [
-        "stack.append('EQUAL')",
+        'EQUAL',
         'stack.append(stack.pop() == stack.pop())',
         'pass']
     ),
     (0x88, [
-        "stack.append('EQUALVERIFY')",
+        'EQUALVERIFY',
         ('if stack.pop() != stack.pop():'
          " raise(TransactionInvalidError('failed EQUALVERIFY'))"),
         'pass']
     ),
     (0x89, [
-        "stack.append('RESERVED1')",
+        'RESERVED1',
         "raise(ReservedWordError('reserved opcode 0x89'))",
         'pass'],
     ),
     (0x8a, [
-        "stack.append('RESERVED2')",
+        'RESERVED2',
         "raise(ReservedWordError('reserved opcode 0x8a'))",
         'pass']
     ),
     (0x8b, [
-        "stack.append('1ADD')",
+        '1ADD',
         'stack[-1] += 1',
         'pass']
     ),
     (0x8c, [
-        "stack.append('1SUB')",
+        '1SUB',
         'stack[-1] -= 1',
         'pass']
     ),
     (0x8d, [
-        "stack.append('2MUL')",
+        '2MUL',
         'stack[-1] *= 2',
         'pass']
     ),
     (0x8e, [
-        "stack.append('2DIV')",
+        '2DIV',
         'stack[-1] //= 2',
         'pass']
     ),
     (0x8f, [
-        "stack.append('NEGATE')",
+        'NEGATE',
         'stack[-1] = -stack[-1]',
         'pass']
     ),
     (0x90, [
-        "stack.append('ABS')",
+        'ABS',
         'stack[-1] = abs(stack[-1])',
         'pass']
     ),
     (0x91, [
-        "stack.append('NOT')",
+        'NOT',
         'stack[-1] = not stack[-1]',
         'pass']
     ),
     (0x92, [
-        "stack.append('0NOTEQUAL')",
+        '0NOTEQUAL',
         'stack[-1] = bool(stack[-1])',
         'pass']
     ),
     (0x93, [
-        "stack.append('ADD')",
+        'ADD',
         'stack.append(stack.pop() + stack.pop())',
         'pass']
     ),
     (0x94, [
-        "stack.append('SUB')",
+        'SUB',
         'stack.append(-stack.pop() + stack.pop())',
         'pass']
     ),
     (0x95, [
-        "stack.append('MUL')",
+        'MUL',
         '_ = stack.pop(0); stack[-1] *= _',
         'pass']
     ),
     (0x96, [
-        "stack.append('DIV')",
+        'DIV',
         '_ = stack.pop(0); stack[-1] //= _',
         'pass']
     ),
     (0x97, [
-        "stack.append('MOD')",
+        'MOD',
         '_ = stack.pop(0); stack[-1] %= _',
         'pass']
     ),
     (0x98, [
-        "stack.append('LSHIFT')",
+        'LSHIFT',
         '_ = stack.pop(0); stack[-1] <<= _',
         'pass']
     ),
     (0x99, [
-        "stack.append('RSHIFT')",
+        'RSHIFT',
         '_ = stack.pop(0); stack[-1] >>= _',
         'pass']
     ),
     (0x9a, [
-        "stack.append('BOOLAND')",
+        'BOOLAND',
         '_ = stack.pop(0); stack[-1] = stack[-1] and _',
         'pass']
     ),
     (0x9b, [
-        "stack.append('BOOLOR')",
+        'BOOLOR',
         '_ = stack.pop(0); stack[-1] = stack[-1] or _',
         'pass']
     ),
     (0x9c, [
-        "stack.append('NUMEQUAL')",
+        'NUMEQUAL',
         'stack.append(stack.pop(0) == stack.pop(0))',
         'pass']
     ),
     (0xa9, [
-        "stack.append('HASH160')",
+        'HASH160',
         'hash160(**globals())',
         'pass']
     ),
     (0xaa, [
-        "stack.append('HASH256')",
+        'HASH256',
         'hash256(**glboals())',
         'pass']
     ),
     (0xab, [
-        "stack.append('CODESEPARATOR')",
+        'CODESEPARATOR',
         'mark.append(len(reference) - len(script) - 1)',
         'mark.append(len(reference) - len(script) - 1)']
     ),
     (0xac, [
-        "stack.append('CHECKSIG')",
+        'CHECKSIG',
         'checksig(**globals())',
         'pass']
     ),
@@ -476,6 +476,12 @@ class TransactionInvalidError(ValueError):
 class ReservedWordError(ValueError):
     pass
 
+def compile(script):
+    '''
+    compiles Script source into bytestring
+    '''
+    pass
+
 def parse(scriptbinary, display=True):
     '''
     breaks down binary script into something readable (to a FORTHer)
@@ -496,7 +502,10 @@ def parse(scriptbinary, display=True):
         else:
             display_op = operation[0]
             logging.debug('`exec`ing 0x%x, %s', opcode, display_op)
-            exec(display_op, {**globals(), **locals()})
+            if re.compile('^[A-Z0-9]+$').match(display_op):
+                stack.append(display_op)
+            else:
+                exec(display_op, {**globals(), **locals()})
     if display:
         for index in range(len(stack)):
             print(stack[index])
@@ -729,6 +738,10 @@ def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
-    for transactions in (PIZZA, FIRST):
-        test_checksig(transactions[0], 0, transactions[1])
-    testall((sys.argv + [None])[1], *sys.argv[2:])
+    command, args = (sys.argv + [None])[1], sys.argv[2:]
+    if command in globals() and callable(globals()[command]):
+        globals()[command](*args)
+    else:  # assuming `command` is actually a blockfile name
+        for transactions in (PIZZA, FIRST):
+            test_checksig(transactions[0], 0, transactions[1])
+        testall(command, *args)

@@ -595,7 +595,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
         logging.error('txcopy: %r, txcopy[2]: %r, txcopy[2][0]: %r',
                       txcopy, txcopy[2], txcopy[2][0])
         raise
-    serialized = serialize(txcopy) + hashtype_code
+    serialized = tx_serialize(txcopy) + hashtype_code
     logging.debug('serialized with hashtype_code: %s', serialized)
     hashed = hash256(stack=[serialized], hashlib=hashlib)
     logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
@@ -619,6 +619,16 @@ def serialize(lists):
             serialized += item
     logging.debug('serialized: %s', b2a_hex(serialized))
     return serialized
+
+def tx_serialize(transaction):
+    '''
+    optimized `serialize` for this particular representation of transaction
+
+    WARNING: side effect: modifies `transaction`, it will remain "flattened"
+    '''
+    transaction[2] = b''.join([b''.join(item) for item in transaction[2]])
+    transaction[4] = b''.join([b''.join(item) for item in transaction[4]])
+    return b''.join(transaction)
 
 def test_checksig(current_tx, txin_index, previous_tx):
     '''

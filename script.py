@@ -649,10 +649,14 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     keep testing every script in blockchain until one fails
     '''
+    lastheight = 0
     coinbase = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
     transactions = next_transaction(blockfiles, minblock, maxblock)
     spendcount, count = 0, 0
-    for hash_ignored, transaction in transactions:
+    for height, hash_ignored, transaction in transactions:
+        if height != lastheight:
+            logging.info('height: %d', height)
+            lastheight = height
         for txindex in range(len(transaction[2])):
             txin = transaction[2][txindex]
             stack = []
@@ -669,7 +673,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.debug('non-coinbase transaction')
                 txout_index = struct.unpack('<L', txin[1])[0]
                 tx_search = next_transaction(blockfiles)
-                for search_hash, tx in tx_search:
+                for ignored, search_hash, tx in tx_search:
                     logging.debug('comparing %r and %r', search_hash, tx_hash)
                     if search_hash == tx_hash:
                         logging.debug('found previous tx: %r', tx)

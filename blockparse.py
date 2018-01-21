@@ -75,7 +75,7 @@ def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.debug('block size: %d', blocksize)
                 logging.debug('block header: %r', blockheader)
                 logging.debug('transactions (partial): %r', transactions[:80])
-                yield (blockheader, transactions)
+                yield (height, blockheader, transactions)
             elif height > maxheight:
                 logging.debug('height %d > maxheight %d', height, maxheight)
                 break  # still executes `height += 1` below!
@@ -210,12 +210,12 @@ def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     iterates over each transaction in every input block
     '''
     blocks = nextblock(blockfiles, minblock, maxblock)
-    for header, transactions in blocks:
+    for height, header, transactions in blocks:
         rawcount, count, data = get_count(transactions)
         for index in range(count):
             raw_transaction, transaction, data = parse_transaction(data)
             txhash = get_hash(raw_transaction)
-            yield txhash, transaction
+            yield height, txhash, transaction
 
 def parse_transaction(data):
     '''

@@ -707,8 +707,10 @@ def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
     otherwise runs a "silent" search of blockfiles and adds it to the cache
     '''
     if search_hash in cache:
+        logging.info('removing %s from cache', search_hash)
         return cache.pop(search_hash)  # no longer needed in cache
     else:
+        logging.info('cache miss, searching for %s', search_hash)
         tx_search = next_transaction(blockfiles)
         for ignored, found_hash, tx in tx_search:
             logging.debug('comparing %r and %r', search_hash, found_hash)

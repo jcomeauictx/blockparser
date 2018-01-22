@@ -128,7 +128,7 @@ SCRIPT_OPS += (
     ),
     (0x69, [
         'VERIFY',
-        "if not stack.pop(): raise TransactionInvalidError('VERIFY failed')",
+        'verify(**globals)',
         'pass']
     ),
     (0x6a, [
@@ -231,14 +231,24 @@ SCRIPT_OPS += (
         'stack.insert(-2, stack[-1])',
         'pass']
     ),
+    (0x7e, [
+        'CAT',
+        '_ = stack.pop(); stack[-1] += _',
+        'pass']
+    ),
+    (0x7f, [
+        'SUBSTR',
+        'substr(**globals())',
+        'pass']
+    ),
     (0x80, [
         'LEFT',
-        'stack.append(stack.pop(-2)[:stack.pop()])',
+        '_ = stack.pop(); stack[-1] = stack[-1][:_]',
         'pass']
     ),
     (0x81, [
         'RIGHT',
-        'stack.append(stack.pop(-2)[stack.pop() - 1:])',
+        '_ = stack.pop(); stack[-1] = stack[-1][:-_]',
         'pass']
     ),
     (0x82, [
@@ -384,7 +394,7 @@ SCRIPT_OPS += (
     ),
     (0xaa, [
         'HASH256',
-        'hash256(**glboals())',
+        'hash256(**globals())',
         'pass']
     ),
     (0xab, [
@@ -395,6 +405,11 @@ SCRIPT_OPS += (
     (0xac, [
         'CHECKSIG',
         'checksig(**globals())',
+        'pass']
+    ),
+    (0xad, [
+        'CHECKSIGVERIFY',
+        'checksig(**globals); verify(**globals)',
         'pass']
     ),
 )
@@ -611,6 +626,28 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
 
 # following subroutines are for use from `exec` calls from stack language,
 # hence the odd parameters
+
+def verify(stack=None, TransactionInvalidError=None, **ignored):
+    '''
+    raise Exception if top of stack isn't a Boolean "true"
+    '''
+    if not stack.pop():
+        raise TransactionInvalidError('VERIFY failed')
+
+def substr(stack=None, **ignored):
+    '''
+    substring of given string, given start and length
+
+    >>> substr(stack=['testcase', 0, 4])
+    'test'
+    >>> substr(stack=['testcase', 4, 4])
+    'case'
+    '''
+    length = stack.pop()
+    beginning = stack.pop()
+    stack[-1] = stack[-1][beginning:beginning + length]
+    return stack[-1]  # for conventional caller
+
 def hash256(stack=None, hashlib=None, **ignored):
     '''
     sha256d hash, which is the hash of a hash

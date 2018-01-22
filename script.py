@@ -98,12 +98,12 @@ SCRIPT_OPS += (
     ),
     (0x63, [
         'IF',
-        "raise NotImplementedError('OP_IF not yet implemented')",
+        'ifstack.append(bool(stack.pop()))',
         'pass']
     ),
     (0x64, [
         'NOTIF',
-        "raise NotImplementedError('OP_NOTIF not yet implemented')",
+        'ifstack.append(not bool(stack.pop()))',
         'pass']
     ),
     (0x65, [
@@ -118,12 +118,12 @@ SCRIPT_OPS += (
     ),
     (0x67, [
         'ELSE',
-        "raise NotImplementedError('OP_ELSE not yet implemented')",
+        'ifstack[-1] = None if ifstack[-1] in [True, None] else True',
         'pass']
     ),
     (0x68, [
         'ENDIF',
-        "raise NotImplementedError('OP_ENDIF not yet implemented')",
+        'ifstack.pop()',
         'pass']
     ),
     (0x69, [
@@ -533,7 +533,7 @@ def script_compile(script):
             word = a2b_hex(word)
         elif type(word) == int:
             if word in [0, 1, -1]:  # there's a word for that
-                compiled += script_compile(['FALSE', 'TRUE', '-1'][word])
+                compiled += script_compile([['FALSE', 'TRUE', '-1'][word]])
                 continue
             elif word in range(2, 16 + 1):
                 compiled += bytes([word + 0x50])
@@ -590,6 +590,10 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     executes scripts the same way (hopefully) as Bitcoin Core would
 
     showing stack at end of each operation
+
+    >>> script = script_compile([1, 2, 3, 'ADD', 'ADD'])
+    >>> run(script, None, None, None)
+    [6]
     '''
     stack = stack or []  # you can pass in a stack from previous script
     logging.debug('stack at start of run: %s', stack)
@@ -834,8 +838,11 @@ def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     command, args = (sys.argv + [None])[1], sys.argv[2:]
-    if command in globals() and callable(globals()[command]):
-        globals()[command](*args)
+    # some commands expect a list
+    if command in ['script_compile']:
+        print(globals()[command](args))
+    elif command in globals() and callable(globals()[command]):
+        print(globals()[command](*args))
     else:  # assuming `command` is actually a blockfile name
         for transactions in (PIZZA, FIRST):
             test_checksig(transactions[0], 0, transactions[1])

@@ -44,4 +44,7 @@ clean:
 	python3 ./$<
 %.run: %.py
 	./$<
+%.doctest: %.py
+	python3 -m doctest $<
+doctest: script.doctest
 -include .deps/*

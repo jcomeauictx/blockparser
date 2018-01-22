@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 #  its numeric value in hexadecimal;
 #  its "representation", most readable way to display the script;
 #  the Python code to be `exec`d in the context of the `run` routine;
-#  the Python code to be `exec`d in the context of an inactive IF-ELSE branch;
+#  the Python code to be `exec`d in the context of an inactive IF-ELSE branch
 SCRIPT_OPS = (
     (0x00, [
         'FALSE',
@@ -25,7 +25,7 @@ SCRIPT_OPS = (
 )
 SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (opcode, [
-        'stack.append(b2a_hex(bytes([script.pop(0) for i in range(opcode)])))',
+        'stack.append(bytes([script.pop(0) for i in range(opcode)]))',
         'stack.append(bytes([script.pop(0) for i in range(opcode)]))',
         '[script.pop(0) for i in range(opcode)]']
     )
@@ -34,7 +34,7 @@ SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
 SCRIPT_OPS += (
     (0x4c, [
         ('count = script.pop(0);'
-         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
+         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
         ('count = script.pop(0);'
          'stack.append(bytes([script.pop(0) for i in range(count)]))'),
         ('count = script.pop(0);'
@@ -43,7 +43,7 @@ SCRIPT_OPS += (
     (0x4d, [
         ("count = struct.unpack('<H', bytes("
          '[script.pop(0) for i in range(2)]));'
-         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
+         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
         ("count = struct.unpack('<H', bytes("
          '[script.pop(0) for i in range(2)]));'
          'stack.append(bytes([script.pop(0) for i in range(count)]))'),
@@ -54,7 +54,7 @@ SCRIPT_OPS += (
     (0x4e, [
         ("count = struct.unpack('<L', bytes("
          '[script.pop(0) for i in range(4)]));'
-         'stack.append(b2a_hex(bytes([script.pop(0) for i in range(count)])))'),
+         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
         ("count = struct.unpack('<L', bytes("
          '[script.pop(0) for i in range(4)]));'
          'stack.append(bytes([script.pop(0) for i in range(count)]))'),
@@ -63,7 +63,7 @@ SCRIPT_OPS += (
          '[script.pop(0) for i in range(count)]')]
     ),
     (0x4f, [
-        'stack.append(-1)',
+        '-1',
         'stack.append(-1)',
         'pass']
     ),
@@ -398,6 +398,9 @@ SCRIPT_OPS += (
         'pass']
     ),
 )
+
+LOOKUP = dict([[value[0], key] for key, value in dict(SCRIPT_OPS).items()
+              if re.compile('^-?[A-Z0-9]+$').match(value[0])])
 DISABLED = [  # add all opcodes disabled in Bitcoin core
 #    0x83, 0x84, 0x85, 0x86
 ]
@@ -476,11 +479,66 @@ class TransactionInvalidError(ValueError):
 class ReservedWordError(ValueError):
     pass
 
-def compile(script):
-    '''
+def script_compile(script):
+    r'''
     compiles Script source into bytestring
+
+    NOTE that if you're submitting script from the command-line, any numbers
+    will be seen as strings and you are unlikely to get the expected result.
+
+    from https://en.bitcoin.it/wiki/Script:
+
+    When used as numbers, byte vectors are interpreted as little-endian
+    variable-length integers with the most significant bit determining the
+    sign of the integer. Thus 0x81 represents -1. 0x80 is another
+    representation of zero (so called negative 0). Positive 0 is
+    represented by a null-length vector.
+
+    Arithmetic inputs are limited to signed 32-bit integers, but may
+    overflow their output.
+
+    >>> test = ['FALSE']
+    >>> parse(script_compile(test), display=False)[1] == test
+    True
+    >>> test = ['DUP', 'HASH160', b'\xa0' * 20, 'EQUALVERIFY', 'CHECKSIG']
+    >>> logging.debug('test: %s', test)
+    >>> compiled = script_compile(test)
+    >>> logging.debug('compiled: %r', compiled)
+    >>> check = parse(compiled, display=False)[1]
+    >>> logging.debug('check: %s', check)
+    >>> test == check
+    True
     '''
-    pass
+    compiled = b''
+    for word in script:
+        if word in LOOKUP:
+            compiled += bytes([LOOKUP[word]])
+            continue
+        elif type(word) == str:
+            word = a2b_hex(word)
+        elif type(word) == int:
+            if word in [0, 1, -1]:  # there's a word for that
+                compiled += script_compile(['FALSE', 'TRUE', '-1'][word])
+                continue
+            elif word in range(2, 16 + 1):
+                compiled += bytes([word + 0x50])
+                continue
+            elif abs(word) <= 127:
+                word = struct.pack('B', word | [0, 0x80][word < 0])
+            elif abs(word) <= 32767:
+                word = struct.pack('<H', word | [0, 0x8000][word < 0])
+            else:  # let's not bother with 3-byte representations
+                word = struct.pack('<L', word | [0, 0x80000000][word < 0])
+        # by now, word is assumed to be a bytestring
+        if len(word) <= 75:
+            compiled += bytes([len(word)]) + word
+        elif len(word) <= 0xff:
+            compiled += b'\x4c' + struct.pack('B', len(word)) + word
+        elif len(word) <= 0xffff:
+            compiled += b'\x4d' + struct.pack('<H', len(word)) + word
+        else:
+            compiled += b'\x4e' + struct.pack('<L', len(word)) + word
+    return compiled
 
 def parse(scriptbinary, display=True):
     '''
@@ -502,7 +560,7 @@ def parse(scriptbinary, display=True):
         else:
             display_op = operation[0]
             logging.debug('`exec`ing 0x%x, %s', opcode, display_op)
-            if re.compile('^[A-Z0-9]+$').match(display_op):
+            if display_op in LOOKUP:
                 stack.append(display_op)
             else:
                 exec(display_op, {**globals(), **locals()})

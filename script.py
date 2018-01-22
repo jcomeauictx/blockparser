@@ -419,6 +419,7 @@ LOOKUP = dict([[value[0], key] for key, value in dict(SCRIPT_OPS).items()
 DISABLED = [  # add all opcodes disabled in Bitcoin core
 #    0x83, 0x84, 0x85, 0x86
 ]
+COINBASE = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
 FIRST = (
     # first transaction made on blockchain other than coinbase rewards
     # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
@@ -764,12 +765,38 @@ def test_checksig(current_tx, txin_index, previous_tx):
     result = bool(stack.pop())
     logging.info('transaction result: %s', ['fail', 'pass'][result])
 
+def unusual(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+    '''
+    look through all output scripts to find unusual patterns, print them out
+    '''
+    lastheight = 0
+    blockfiles = [blockfiles] if blockfiles else None
+    transactions = next_transaction(blockfiles, minblock, maxblock)
+    for height, tx_hash, transaction in transactions:
+        for txindex in range(len(transaction[4])):
+            txout = transaction[4][txindex]
+            logging.debug('txout: %s', txout)
+            txout_script = txout[2]
+            parsed, readable = parse(txout_script, display=False)
+            logging.debug(readable)
+            if len(readable) == 2:
+                if readable[-1] == 'CHECKSIG' and len(readable[0]) == 65:
+                    continue
+            elif len(readable) == 5:
+                addr_hash = readable.pop(2)
+                if (readable == ['DUP', 'HASH160', 'EQUALVERIFY', 'CHECKSIG']
+                        and len(addr_hash) == 20):
+                    continue
+                else:
+                    readable.insert(2, addr_hash)
+            print('*** unusual script in %d[%s][%d] *** %s' % (
+                  height, b2a_hex(tx_hash), txindex, readable))
+
 def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     keep testing every script in blockchain until one fails
     '''
     lastheight = 0
-    coinbase = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
     blockfiles = [blockfiles] if blockfiles else None
     transactions = next_transaction(blockfiles, minblock, maxblock)
     spendcount, count = 0, 0
@@ -793,7 +820,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.info('input script %s was programmed to fail', readable)
             count += 1
             previous_hash = txin[0]
-            if previous_hash != coinbase:
+            if previous_hash != COINBASE:
                 logging.debug('non-coinbase transaction')
                 txout_index = struct.unpack('<L', txin[1])[0]
                 tx = silent_search(blockfiles, previous_hash, cache)

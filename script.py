@@ -7,7 +7,7 @@ from binascii import b2a_hex, a2b_hex
 # cheating for now until I can write my own
 # pip install --user git+https://github.com/jcomeauictx/python-bitcoinlib.git
 from bitcoin.core.key import CECKey
-from blockparse import next_transaction, varint_length
+from blockparse import next_transaction, varint_length, show_hash
 from collections import OrderedDict
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
@@ -748,7 +748,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     logging.debug('parsing and displaying current txin script...')
     txin = current_tx[2][txin_index]
     logging.debug('txin: %s', txin)
-    logging.debug('previous tx hash: %s', b2a_hex(txin[0]))
+    logging.debug('previous tx hash: %s', show_hash(txin[0]))
     txout_index = struct.unpack('<L', txin[1])[0]
     txin_script = txin[3]
     parsed, readable = parse(txin_script)

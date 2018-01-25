@@ -7,7 +7,7 @@ from binascii import b2a_hex, a2b_hex
 # cheating for now until I can write my own
 # pip install --user git+https://github.com/jcomeauictx/python-bitcoinlib.git
 from bitcoin.core.key import CECKey
-from blockparse import next_transaction, varint_length, show_hash
+from blockparse import next_transaction, varint_length, show_hash, to_long
 from collections import OrderedDict
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
@@ -611,6 +611,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
             opcode = script.pop(0)
             operation = opcodes.get(opcode, None)
             if operation is None:
+                logging.error('fatal error in %s, offset %d', txnew, txindex)
                 raise NotImplementedError('no such opcode 0x%x' % opcode)
             else:
                 if ifstack and not ifstack[-1]:
@@ -770,6 +771,7 @@ def unusual(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     look through all output scripts to find unusual patterns, print them out
     '''
     lastheight = 0
+    p2pk, p2pkh, unusual = 0, 0, 0
     blockfiles = [blockfiles] if blockfiles else None
     transactions = next_transaction(blockfiles, minblock, maxblock)
     for height, tx_hash, transaction in transactions:
@@ -777,20 +779,26 @@ def unusual(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             txout = transaction[4][txindex]
             logging.debug('txout: %s', txout)
             txout_script = txout[2]
+            amount = to_long(txout[0]) / 100000000
             parsed, readable = parse(txout_script, display=False)
             logging.debug(readable)
             if len(readable) == 2:
                 if readable[-1] == 'CHECKSIG' and len(readable[0]) == 65:
+                    p2pk += 1
                     continue
             elif len(readable) == 5:
                 addr_hash = readable.pop(2)
                 if (readable == ['DUP', 'HASH160', 'EQUALVERIFY', 'CHECKSIG']
                         and len(addr_hash) == 20):
+                    p2pkh += 1
                     continue
                 else:
                     readable.insert(2, addr_hash)
-            print('*** unusual script in %d[%s][%d] *** %s' % (
-                  height, b2a_hex(tx_hash), txindex, readable))
+            unusual += 1
+            logging.info('scripts: P2PK: %d, P2PKH: %d, unusual: %d',
+                         p2pk, p2pkh, unusual)
+            print('*** unusual script in %d[%s][%d](%.08f) *** %s' % (
+                  height, show_hash(tx_hash), txindex, amount, readable))
 
 def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''

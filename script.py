@@ -748,7 +748,7 @@ def substr(stack=None, **ignored):
     stack[-1] = stack[-1][beginning:beginning + length]
     return stack[-1]  # for conventional caller
 
-def hash256(stack=None, hashlib=None, **ignored):
+def hash256(stack=None, hashlib=hashlib, **ignored):
     '''
     sha256d hash, which is the hash of a hash
     '''
@@ -756,7 +756,7 @@ def hash256(stack=None, hashlib=None, **ignored):
     stack.append(hashlib.sha256(hashlib.sha256(data).digest()).digest())
     return stack[-1]  # for conventional caller
 
-def sha256(stack=None, hashlib=None, **ignored):
+def sha256(stack=None, hashlib=hashlib, **ignored):
     '''
     sha256 single hash digest
     '''
@@ -764,7 +764,7 @@ def sha256(stack=None, hashlib=None, **ignored):
     stack.append(hashlib.sha256(data).digest())
     return stack[-1]  # for conventional caller
 
-def ripemd160(stack=None, hashlib=None, **ignored):
+def ripemd160(stack=None, hashlib=hashlib, **ignored):
     '''
     RIPEMD160 hash of data at top of stack
     '''
@@ -773,7 +773,7 @@ def ripemd160(stack=None, hashlib=None, **ignored):
     stack.append(ripemd160.update(data).digest())
     return stack[-1]  # for conventional caller
 
-def hash160(stack=None, hashlib=None, **ignored):
+def hash160(stack=None, hashlib=hashlib, **ignored):
     '''
     input is hashed twice: first with SHA-256 and then with RIPEMD-160
     '''
@@ -819,7 +819,7 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
         raise
     serialized = tx_serialize(txcopy) + hashtype_code
     logging.debug('serialized with hashtype_code: %s', serialized)
-    hashed = hash256(stack=[serialized], hashlib=hashlib)
+    hashed = hash256(stack=[serialized])
     logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
     key = CECKey()
     key.set_pubkey(pubkey)
@@ -988,8 +988,8 @@ if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     command, args = (sys.argv + [None])[1], sys.argv[2:]
     # some commands expect a list
-    if command in ['script_compile']:
-        print(globals()[command](args))
+    if command in ['script_compile', 'hash160']:
+        print(globals()[command]([bytes(s, 'utf8') for s in args]))
     elif command in globals() and callable(globals()[command]):
         print(globals()[command](*args))
     else:  # assuming `command` is actually a blockfile name

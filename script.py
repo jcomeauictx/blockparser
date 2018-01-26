@@ -514,6 +514,7 @@ DISABLED = [  # add all opcodes disabled in Bitcoin core
 #    0x83, 0x84, 0x85, 0x86
 ]
 COINBASE = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
+BASE58DIGITS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 FIRST = (
     # first transaction made on blockchain other than coinbase rewards
     # from block 170, see https://en.bitcoin.it/wiki/OP_CHECKSIG
@@ -724,10 +725,75 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     # problem with using `exec` is that it has its own environment
     return stack
 
+def base58decode(address):
+    '''
+    simple base58 decoder
+
+    based on //github.com/jgarzik/python-bitcoinlib/blob/master/
+     bitcoin/base58.py
+    '''
+    result = 0
+    for digit in address:
+        result = (result * 58) + BASE58DIGITS.index(digit)
+    logging.debug('result: %s', result)
+    decoded = result.to_bytes((result.bit_length() + 7) // 8, 'big')
+    padding = b'\0' * (len(address) - len(address.lstrip(BASE58DIGITS[0])))
+    return padding + decoded
+
+def base58encode(bytestring):
+    '''
+    simple base58 encoder
+
+    based on //github.com/jgarzik/python-bitcoinlib/blob/master/
+     bitcoin/base58.py
+    '''
+    encoded = ''
+    cleaned = bytestring.lstrip(b'\0')
+    string = b2a_hex(bytestring)
+    number = int(string, 16)
+    while number:
+        number, remainder = divmod(number, 58)
+        encoded += BASE58DIGITS[remainder]
+    padding = BASE58DIGITS[0] * (len(bytestring) - len(cleaned))
+    return padding + encoded[::-1]
+
+def addr_to_hash(address, check_validity=True):
+    r'''
+    convert address back to its hash160
+
+    >>> addr_to_hash('3BTChqkFai51wFwrHSVdvSW9cPXifrJ7jC')
+    b'k\x14o\x13~~\x8a\xa6a\xb3QZ\xc8\x85l\xbc\xe0a\xa3\xf2'
+    '''
+    binary = base58decode(address)
+    logging.debug('binary: %r', binary)
+    intermediate, checksum = binary[:-4], binary[-4:]
+    if check_validity:
+        check = hash256(stack=[intermediate])[:4]
+        if check != checksum:
+            logging.error('%r != %r', check, checksum)
+            raise ValueError('Invalid address %s' % address)
+        if intermediate[0] not in b'\x00\x05':
+            logging.warning('%s not a Bitcoin mainnet address', address)
+    return intermediate[1:]
+
+def hash_to_addr(hash160, padding=b'\0'):
+    '''
+    convert address hash to its base58 form
+
+    >>> hash_to_addr(
+    ...  bytes.fromhex('6b146f137e7e8aa661b3515ac8856cbce061a3f2'), b'\x05')
+    '3BTChqkFai51wFwrHSVdvSW9cPXifrJ7jC'
+    '''
+    intermediate = padding + hash160
+    checksum = hash256(stack=[intermediate])[:4]
+    logging.debug('hash_to_addr adding checksum %r', checksum)
+    return base58encode(intermediate + checksum)
+
 # following subroutines are for use from `exec` calls from stack language,
 # hence the odd parameters
 
-def verify(stack=None, TransactionInvalidError=None, **ignored):
+def verify(stack=None,
+        TransactionInvalidError=TransactionInvalidError, **ignored):
     '''
     raise Exception if top of stack isn't a Boolean "true"
     '''
@@ -886,6 +952,9 @@ def unusual(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     blockfiles = [blockfiles] if blockfiles else None
     transactions = next_transaction(blockfiles, minblock, maxblock)
     for height, tx_hash, transaction in transactions:
+        if height != lastheight:
+            logging.info('height: %d', height)
+            lastheight = height
         for txindex in range(len(transaction[4])):
             txout = transaction[4][txindex]
             logging.debug('txout: %s', txout)

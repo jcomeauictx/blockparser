@@ -128,7 +128,7 @@ SCRIPT_OPS += (
     ),
     (0x69, [
         'VERIFY',
-        'verify(**globals)',
+        'verify(**globals())',
         'pass']
     ),
     (0x6a, [
@@ -779,7 +779,7 @@ def unusual(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             txout = transaction[4][txindex]
             logging.debug('txout: %s', txout)
             txout_script = txout[2]
-            amount = to_long(txout[0]) / 100000000
+            amount = to_long(txout[0])
             parsed, readable = parse(txout_script, display=False)
             logging.debug(readable)
             if len(readable) == 2:
@@ -797,8 +797,11 @@ def unusual(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             unusual += 1
             logging.info('scripts: P2PK: %d, P2PKH: %d, unusual: %d',
                          p2pk, p2pkh, unusual)
-            print('*** unusual script in %d[%s][%d](%.08f) *** %s' % (
-                  height, show_hash(tx_hash), txindex, amount, readable))
+            print('%s' % {'unusual': {
+                  'output': '%s:%d' % (show_hash(tx_hash), txindex),
+                  'height': height,
+                  'value': amount,
+                  'script': readable}})
 
 def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''

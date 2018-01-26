@@ -789,6 +789,21 @@ def hash_to_addr(hash160, padding=b'\0'):
     logging.debug('hash_to_addr adding checksum %r', checksum)
     return base58encode(intermediate + checksum)
 
+def pubkey_to_hash(pubkey):
+    '''
+    hash160 a pubkey
+
+    there can be no reverse to this procedure, unlike hash_to_addr
+
+    >>> pubkey = ('043946a3002f7e56bad8f134f9b34282906a1ff5c54d9a60'
+    ...           'd47ef691c453bf5e1706d314b474399f6dab5088cf0c9ac2'
+    ...           '8543c6f13b66aef3e1ff80d5e14111f7be')
+    >>> hashed = pubkey_to_hash(bytes.fromhex(pubkey))
+    >>> hash_to_addr(hashed)
+    '1Q7f2rL2irjpvsKVys5W2cmKJYss82rNCy'
+    '''
+    return hash160([pubkey])
+
 # following subroutines are for use from `exec` calls from stack language,
 # hence the odd parameters
 
@@ -978,7 +993,7 @@ def unusual(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             logging.info('scripts: P2PK: %d, P2PKH: %d, unusual: %d',
                          p2pk, p2pkh, unusual)
             print('%s' % {'unusual': {
-                  'output': '%s:%d' % (show_hash(tx_hash), txindex),
+                  'output': '%s:%d' % (show_hash(tx_hash).decode(), txindex),
                   'height': height,
                   'value': amount,
                   'script': readable}})

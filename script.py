@@ -349,42 +349,104 @@ SCRIPT_OPS += (
     ),
     (0x95, [
         'MUL',
-        '_ = stack.pop(0); stack[-1] *= _',
+        '_ = stack.pop(); stack[-1] *= _',
         'pass']
     ),
     (0x96, [
         'DIV',
-        '_ = stack.pop(0); stack[-1] //= _',
+        '_ = stack.pop(); stack[-1] //= _',
         'pass']
     ),
     (0x97, [
         'MOD',
-        '_ = stack.pop(0); stack[-1] %= _',
+        '_ = stack.pop(); stack[-1] %= _',
         'pass']
     ),
     (0x98, [
         'LSHIFT',
-        '_ = stack.pop(0); stack[-1] <<= _',
+        '_ = stack.pop(); stack[-1] <<= _',
         'pass']
     ),
     (0x99, [
         'RSHIFT',
-        '_ = stack.pop(0); stack[-1] >>= _',
+        '_ = stack.pop(); stack[-1] >>= _',
         'pass']
     ),
     (0x9a, [
         'BOOLAND',
-        '_ = stack.pop(0); stack[-1] = stack[-1] and _',
+        '_ = stack.pop(); stack[-1] = stack[-1] and _',
         'pass']
     ),
     (0x9b, [
         'BOOLOR',
-        '_ = stack.pop(0); stack[-1] = stack[-1] or _',
+        '_ = stack.pop(); stack[-1] = stack[-1] or _',
         'pass']
     ),
+    # FIXME: all numeric ops need to treat byte vectors correctly as numbers
     (0x9c, [
         'NUMEQUAL',
-        'stack.append(stack.pop(0) == stack.pop(0))',
+        'stack.append(stack.pop() == stack.pop())',
+        'pass']
+    ),
+    (0x9d, [
+        'NUMEQUALVERIFY',
+        'stack.append(stack.pop() == stack.pop()); verify(**globals())',
+        'pass']
+    ),
+    (0x9e, [
+        'NUMNOTEQUAL',
+        'stack.append(stack.pop() != stack.pop())',
+        'pass']
+    ),
+    (0x9f, [
+        'LESSTHAN',
+        'stack.append(stack.pop() > stack.pop())',
+        'pass']
+    ),
+    (0xa0, [
+        'GREATERTHAN',
+        'stack.append(stack.pop() < stack.pop())',
+        'pass']
+    ),
+    (0xa1, [
+        'LESSTHANOREQUAL',
+        'stack.append(stack.pop() >= stack.pop())',
+        'pass']
+    ),
+    (0xa2, [
+        'GREATERTHANOREQUAL',
+        'stack.append(stack.pop() <= stack.pop())',
+        'pass']
+    ),
+    (0xa3, [
+        'MIN',
+        'stack.append(min(stack.pop(), stack.pop()))',
+        'pass']
+    ),
+    (0xa4, [
+        'MAX',
+        'stack.append(max(stack.pop(), stack.pop()))',
+        'pass']
+    ),
+    (0xa5, [
+        'WITHIN',
+        '_max = stack.pop(); _min = stack.pop();'
+        'stack.append(_min <= stack.pop() <= _max)',
+        'pass']
+    ),
+    (0xa6, [
+        'RIPEMD160',
+        'ripemd160(**globals())',
+        'pass']
+    ),
+    (0xa7, [
+        'SHA1',
+        'sha1(**globals())',
+        'pass']
+    ),
+    (0xa8, [
+        'SHA256',
+        'sha256(**globals())',
         'pass']
     ),
     (0xa9, [
@@ -409,9 +471,41 @@ SCRIPT_OPS += (
     ),
     (0xad, [
         'CHECKSIGVERIFY',
-        'checksig(**globals); verify(**globals)',
+        'checksig(**globals()); verify(**globals())',
         'pass']
     ),
+    (0xae, [
+        'CHECKMULTISIG',
+        'checkmultisig(**globals())',
+        'pass']
+    ),
+    (0xaf, [
+        'CHECKMULTISIGVERIFY',
+        'checkmultisig(**globals()); verify(**globals())',
+        'pass']
+    ),
+    (0xb0, [
+        'NOP1',
+        'pass',
+        'pass']
+    ),
+    (0xb1, [
+        'CHECKLOCKTIMEVERIFY',
+        'checklocktimeverify(**globals())',
+        'pass']
+    ),
+    (0xb2, [
+        'CHECKSEQUENCEVERIFY',
+        'checksequenceverify(**globals())',
+        'pass']
+    ),
+)
+SCRIPT_OPS += tuple(  # 0xb3 - 0xb9 are NOP_4 through NOP_10
+    (opcode, [
+        'NOP%d' % (opcode - 0xaf),
+        'pass',
+        'pass'])
+    for opcode in range(0xb3, 0xba)
 )
 
 LOOKUP = dict([[value[0], key] for key, value in dict(SCRIPT_OPS).items()
@@ -660,6 +754,23 @@ def hash256(stack=None, hashlib=None, **ignored):
     '''
     data = stack.pop()
     stack.append(hashlib.sha256(hashlib.sha256(data).digest()).digest())
+    return stack[-1]  # for conventional caller
+
+def sha256(stack=None, hashlib=None, **ignored):
+    '''
+    sha256 single hash digest
+    '''
+    data = stack.pop()
+    stack.append(hashlib.sha256(data).digest())
+    return stack[-1]  # for conventional caller
+
+def ripemd160(stack=None, hashlib=None, **ignored):
+    '''
+    RIPEMD160 hash of data at top of stack
+    '''
+    data = stack.pop()
+    ripemd160 = hashlib.new('ripemd160')
+    stack.append(ripemd160.update(data).digest())
     return stack[-1]  # for conventional caller
 
 def hash160(stack=None, hashlib=None, **ignored):

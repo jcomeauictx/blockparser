@@ -19,91 +19,75 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 SCRIPT_OPS = (
     (0x00, [
         'FALSE',
-        "stack.append(b'')",
-        'pass']
+        'op_false',
+        'op_nop']
     ),
 )
 SCRIPT_OPS += tuple(  # 0x01 through 0x4b are all implied PUSH operations
     (opcode, [
-        'stack.append(bytes([script.pop(0) for i in range(opcode)]))',
-        'stack.append(bytes([script.pop(0) for i in range(opcode)]))',
-        '[script.pop(0) for i in range(opcode)]']
+        'op_pushdata',
+        'op_pushdata',
+        'skip']
     )
     for opcode in range(0x01, 0x4c)
 )
 SCRIPT_OPS += (
     (0x4c, [
-        ('count = script.pop(0);'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
-        ('count = script.pop(0);'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
-        ('count = script.pop(0);'
-         '[script.pop(0) for i in range(count)]')]
+        'op_pushdata1',
+        'op_pushdata1',
+        'skip']
     ),
     (0x4d, [
-        ("count = struct.unpack('<H', bytes("
-         '[script.pop(0) for i in range(2)]));'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
-        ("count = struct.unpack('<H', bytes("
-         '[script.pop(0) for i in range(2)]));'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
-        ("count = struct.unpack('<H', bytes("
-         '[script.pop(0) for i in range(2)]));'
-         '[script.pop(0) for i in range(count)]')]
+        'op_pushdata2',
+        'op_pushdata2',
+        'skip']
     ),
     (0x4e, [
-        ("count = struct.unpack('<L', bytes("
-         '[script.pop(0) for i in range(4)]));'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
-        ("count = struct.unpack('<L', bytes("
-         '[script.pop(0) for i in range(4)]));'
-         'stack.append(bytes([script.pop(0) for i in range(count)]))'),
-        ("count = struct.unpack('<L', bytes("
-         '[script.pop(0) for i in range(4)]));'
-         '[script.pop(0) for i in range(count)]')]
+        'op_pushdata4',
+        'op_pushdata4',
+        'skip']
     ),
     (0x4f, [
         '-1',
-        'stack.append(-1)',
-        'pass']
+        'op_1negate',
+        'op_nop']
     ),
     (0x50, [
         'RESERVED',
-        "raise ReservedWordError('reserved opcode 0x50')",
-        'pass']
+        'op_reserved',
+        'op_nop']
     ),
     (0x51, [
         'TRUE',
-        'stack.append(1)',
-        'pass']
+        'op_number',
+        'op_nop']
     )
 )
 SCRIPT_OPS += tuple(  # 0x52 - 0x60 are OP_2 through OP_16
     (opcode, [
-        'stack.append(opcode - 0x50)',
-        'stack.append(opcode - 0x50)',
+        'op_shownumber',
+        'op_number',
         'pass'])
-    for opcode in range(0x52, 0x60)
+    for opcode in range(0x52, 0x61)
 )
 SCRIPT_OPS += (
     (0x61, [
         'NOP',
-        'pass',
-        'pass']
+        'op_nop',
+        'op_nop']
     ),
     (0x62, [
         'VER',
-        "raise ReservedWordError('reserved opcode 0x62')",
-        'pass']
+        'op_reserved',
+        'op_nop']
     ),
     (0x63, [
         'IF',
-        'ifstack.append(bool(stack.pop()))',
-        'pass']
+        'op_if',
+        'op_nop']
     ),
     (0x64, [
         'NOTIF',
-        'ifstack.append(not bool(stack.pop()))',
         'pass']
     ),
     (0x65, [
@@ -670,11 +654,11 @@ def parse(scriptbinary, display=True):
             stack.append(hex(opcode) + " (not yet implemented)")
         else:
             display_op = operation[0]
-            logging.debug('`exec`ing 0x%x, %s', opcode, display_op)
+            logging.debug('running 0x%x, %s', opcode, display_op)
             if display_op in LOOKUP:
                 stack.append(display_op)
             else:
-                exec(display_op, {**globals(), **locals()})
+                globals()[display_op](opcode, stack, script, **locals())
     if display:
         for index in range(len(stack)):
             print(stack[index])
@@ -713,17 +697,14 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
                     run_op = operation[2]
                 else:
                     run_op = operation[1]
-                logging.info('`exec`ing operation 0x%x, %s', opcode, run_op)
-                exec(run_op, {**globals(), **locals()})
+                logging.info('running operation 0x%x, %s', opcode, run_op)
+                globals()[run_op](opcode, stack, script, **locals())
             logging.info('script: %r, stack: %s', script, stack)
     except (TransactionInvalidError, ReservedWordError) as failed:
         logging.error('script failed or otherwise invalid: %s', failed)
         logging.info('stack: %s', stack)
         stack.append(None)
     logging.debug('run leaves stack at: %s', stack)
-    # need to actually pass the stack back to caller...
-    # problem with using `exec` is that it has its own environment
-    return stack
 
 def base58decode(address):
     '''
@@ -906,6 +887,122 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     key.set_pubkey(pubkey)
     stack.append(key.verify(hashed, bytes(signature)))
     return stack[-1]  # for conventional caller
+
+def op_nop(opcode, stack, script, **kwargs):
+    '''
+    handles all no-ops
+    '''
+    pass
+
+def skip(opcode, stack, script, **kwargs):
+    '''
+    for use in an unused conditional branch; drops data instead of pushing it
+    '''
+    trash = []
+    if opcode < 0x4c:
+        op_pushdata(opcode, trash, script, **kwargs)
+    else:
+        function = [op_pushdata1, op_pushdata2, op_pushdata4][opcode - 0x4c]
+        function(opcode, trash, script, **kwargs)
+
+def op_false(opcode, stack, script, **kwargs):
+    '''
+    pushes a zero-length bytestring that indicates False
+    '''
+    stack.append(b'')
+
+def op_pushdata(opcode, stack, script, **kwargs):
+    '''
+    handles all the data-pushing operations 0x1 - 0x4b
+
+    see the `Constants` section of https://en.bitcoin.it/wiki/Script
+    '''
+    stack.append(bytes(script.pop(0) for i in range(opcode)))
+
+def op_pushdata1(opcode, stack, script, **kwargs):
+    '''
+    pushes up to 255 bytes of data according to next byte in script
+    '''
+    count = script.pop(0)
+    op_pushdata(count, stack, script, **kwargs)
+
+def op_pushdata2(opcode, stack, script, **kwargs):
+    '''
+    pushes up to 65535 bytes of data according to next 2 bytes in script
+    '''
+    count = script.pop(0)
+    count += 0x100 * script.pop(0)
+    op_pushdata(count, stack, script, **kwargs)
+
+def op_pushdata4(opcode, stack, script, **kwargs):
+    count = script.pop(0)
+    count += 0x100 + script.pop(0)
+    count += 0x10000 + script.pop(0)
+    count += 0x1000000 + script.pop(0)
+    op_pushdata(count, stack, script, **kwargs)
+
+def op_1negate(opcode, stack, script, **kwargs):
+    '''
+    push -1 onto the stack
+    '''
+    stack.push(b'\x81')
+
+def op_number(opcode, stack, script, **kwargs):
+    '''
+    push number from 1 ('TRUE') to 16 onto the stack
+    '''
+    stack.push(bytes([opcode - 0x50]))
+
+def op_shownumber(opcode, stack, script, **kwargs):
+    '''
+    like op_number, but unpack it for display of script
+    '''
+    op_number(opcode, stack, script, **kwargs)
+    stack.append(number(stack.pop()))
+
+def bytevector(number):
+    '''
+    convert integer to a byte vector according to Script rules
+
+    let struct.pack throw exception if it doesn't fit
+    '''
+    vector = struct.pack('<L', abs(number)).rstrip(b'\0')
+    if vector[-1] & 0x80:
+        vector += b'\0'
+    if number < 0:
+        vector = vector[:-1] + bytes([vector[-1] | 0x80])
+    if len(vector) > 4:
+        raise ValueError('%d is too large for Script numbers' % number)
+    return vector
+
+def number(bytestring):
+    '''
+    treat bytestring as a number according to Script rules
+    '''
+    msbs = bytestring[-1]
+    sign, msbs = bool(msbs & 0x80), msbs & 0x7f
+    bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
+    return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
+
+def op_reserved(opcode, stack, script, **kwargs):
+    '''
+    reserved opcodes
+    '''
+    raise ReservedWordError('Reserved opcode 0x%x' % opcode)
+
+def op_if(opcode, stack, script, **kwargs):
+    '''
+    begin an IF-ELSE-ENDIF block
+    '''
+    kwargs['ifstack'].append(bool(stack.pop()))
+
+def op_notif(opcode, stack, script, **kwargs):
+    '''
+    begin a NOTIF-ELSE-ENDIF block
+    '''
+    kwargs['ifstack'].append(not bool(stack.pop()))
+
+# end of script ops
 
 def serialize(lists):
     '''

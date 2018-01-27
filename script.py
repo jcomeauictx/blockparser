@@ -13,9 +13,9 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # each item in SCRIPT_OPS gives:
 #  its numeric value in hexadecimal;
-#  its "representation", most readable way to display the script;
-#  the Python code to be `exec`d in the context of the `run` routine;
-#  the Python code to be `exec`d in the context of an inactive IF-ELSE branch
+#  its "representation", most readable way to display the opcode;
+#  the Python routine to be `exec`d in the context of the `run` routine;
+#  the Python routine to be `exec`d in the context of an inactive IF-ELSE branch
 SCRIPT_OPS = (
     (0x00, [
         'FALSE',

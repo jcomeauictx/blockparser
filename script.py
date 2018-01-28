@@ -233,13 +233,13 @@ SCRIPT_OPS += (
     ),
     (0x81, [
         'RIGHT',
-        '_ = stack.pop(); stack[-1] = stack[-1][:-_]',
-        'pass']
+        'op_right',
+        'op_nop']
     ),
     (0x82, [
         'SIZE',
-        'stack.append(len(stack[-1]))',
-        'pass']
+        'op_size',
+        'op_nop']
     ),
     (0x83, [
         'INVERT',
@@ -1191,8 +1191,39 @@ def op_left(opcode=None, stack=None, script=None, **kwargs):
     >>> stack
     [b'this']
     '''
-    length = number(stack.pop());
-    stack[-1] = stack[-1][:length]
+    index = number(stack.pop());
+    assert_true(index >= 0)
+    stack[-1] = stack[-1][:index]
+
+def op_right(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    keeps only characters right of the specified point in a string
+    disabled in bitcoin-core
+
+    >>> stack = [b'this is a test', b'\4']
+    >>> op_right(stack=stack)
+    >>> stack
+    [b' is a test']
+    '''
+    index = number(stack.pop());
+    assert_true(index >= 0)
+    stack[-1] = stack[-1][index:]
+
+def op_size(opcode=None, stack=None, script=None, **kwargs):
+    r'''
+    pushes the string length of the top element of the stack
+    (without popping it)
+
+    >>> stack = [b'']
+    >>> op_size(stack=stack)
+    >>> stack
+    [b'', b'']
+    >>> stack = [b'this is a test']
+    >>> op_size(stack=stack)
+    >>> stack
+    [b'this is a test', b'\x0e']
+    '''
+    stack.append(bytevector(len(stack[-1])))
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''
@@ -1209,6 +1240,8 @@ def bytevector(number):
 
     let struct.pack throw exception if it doesn't fit
     '''
+    if not number:
+        return b''
     vector = struct.pack('<L', abs(number)).rstrip(b'\0')
     if vector[-1] & 0x80:
         vector += b'\0'

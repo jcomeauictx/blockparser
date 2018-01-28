@@ -113,18 +113,18 @@ SCRIPT_OPS += (
     ),
     (0x69, [
         'VERIFY',
-        'verify(**globals())',
-        'pass']
+        'op_verify',
+        'op_nop']
     ),
     (0x6a, [
         'RETURN',
-        "raise TransactionInvalidError('RETURN')",
-        'pass']
+        'op_return',
+        'op_nop']
     ),
     (0x6b, [
         'TOALTSTACK',
-        'alstack.append(stack.pop()',
-        'pass']
+        'op_toaltstack',
+        'op_nop']
     ),
     (0x6c, [
         'FROMALTSTACK',
@@ -324,8 +324,8 @@ SCRIPT_OPS += (
     ),
     (0x93, [
         'ADD',
-        'stack.append(stack.pop() + stack.pop())',
-        'pass']
+        'op_add',
+        'op_nop']
     ),
     (0x94, [
         'SUB',
@@ -673,7 +673,10 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     showing stack at end of each operation
 
     >>> script = script_compile([1, 2, 3, 'ADD', 'ADD'])
-    >>> run(script, None, None, None)
+    >>> logging.info('script: %r', script)
+    >>> stack = []
+    >>> run(script, None, None, None, stack)
+    >>> stack
     [6]
     '''
     stack = stack or []  # you can pass in a stack from previous script
@@ -788,11 +791,10 @@ def pubkey_to_hash(pubkey):
     '''
     return hash160([pubkey])
 
-# following subroutines are for use from `exec` calls from stack language,
-# hence the odd parameters
+# the following are the actual script operations, called from `run` routine.
+# they all have the same parameter list
 
-def verify(stack=None,
-        TransactionInvalidError=TransactionInvalidError, **ignored):
+def op_verify(opcode=None, stack=None, script=None, **kwargs):
     '''
     raise Exception if top of stack isn't a Boolean "true"
     '''
@@ -891,13 +893,13 @@ def checksig(stack=None, reference=None, mark=None, parsed=None,
     stack.append(key.verify(hashed, bytes(signature)))
     return stack[-1]  # for conventional caller
 
-def op_nop(opcode, stack, script, **kwargs):
+def op_nop(opcode=None, stack=None, script=None, **kwargs):
     '''
     handles all no-ops
     '''
     pass
 
-def skip(opcode, stack, script, **kwargs):
+def skip(opcode=None, stack=None, script=None, **kwargs):
     '''
     for use in an unused conditional branch; drops data instead of pushing it
     '''
@@ -908,13 +910,13 @@ def skip(opcode, stack, script, **kwargs):
         function = [op_pushdata1, op_pushdata2, op_pushdata4][opcode - 0x4c]
         function(opcode, trash, script, **kwargs)
 
-def op_false(opcode, stack, script, **kwargs):
+def op_false(opcode=None, stack=None, script=None, **kwargs):
     '''
     pushes a zero-length bytestring that indicates False
     '''
     stack.append(b'')
 
-def op_pushdata(opcode, stack, script, **kwargs):
+def op_pushdata(opcode=None, stack=None, script=None, **kwargs):
     '''
     handles all the data-pushing operations 0x1 - 0x4b
 
@@ -922,14 +924,14 @@ def op_pushdata(opcode, stack, script, **kwargs):
     '''
     stack.append(bytes(script.pop(0) for i in range(opcode)))
 
-def op_pushdata1(opcode, stack, script, **kwargs):
+def op_pushdata1(opcode=None, stack=None, script=None, **kwargs):
     '''
     pushes up to 255 bytes of data according to next byte in script
     '''
     count = script.pop(0)
     op_pushdata(count, stack, script, **kwargs)
 
-def op_pushdata2(opcode, stack, script, **kwargs):
+def op_pushdata2(opcode=None, stack=None, script=None, **kwargs):
     '''
     pushes up to 65535 bytes of data according to next 2 bytes in script
     '''
@@ -937,31 +939,83 @@ def op_pushdata2(opcode, stack, script, **kwargs):
     count += 0x100 * script.pop(0)
     op_pushdata(count, stack, script, **kwargs)
 
-def op_pushdata4(opcode, stack, script, **kwargs):
+def op_pushdata4(opcode=None, stack=None, script=None, **kwargs):
     count = script.pop(0)
     count += 0x100 + script.pop(0)
     count += 0x10000 + script.pop(0)
     count += 0x1000000 + script.pop(0)
     op_pushdata(count, stack, script, **kwargs)
 
-def op_1negate(opcode, stack, script, **kwargs):
+def op_1negate(opcode=None, stack=None, script=None, **kwargs):
     '''
     push -1 onto the stack
     '''
     stack.append(b'\x81')
 
-def op_number(opcode, stack, script, **kwargs):
+def op_number(opcode=None, stack=None, script=None, **kwargs):
     '''
     push number from 1 ('TRUE') to 16 onto the stack
     '''
     stack.append(bytes([opcode - 0x50]))
 
-def op_shownumber(opcode, stack, script, **kwargs):
+def op_shownumber(opcode=None, stack=None, script=None, **kwargs):
     '''
     like op_number, but unpack it for display of script
     '''
     op_number(opcode, stack, script, **kwargs)
     stack.append(number(stack.pop()))
+
+def op_reserved(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    reserved opcodes
+    '''
+    raise ReservedWordError('Reserved opcode 0x%x' % opcode)
+
+def op_if(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    begin an IF-ELSE-ENDIF block
+    '''
+    kwargs['ifstack'].append(bool(stack.pop()))
+
+def op_notif(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    begin a NOTIF-ELSE-ENDIF block
+    '''
+    kwargs['ifstack'].append(not bool(stack.pop()))
+
+def op_else(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    perform following action only if preceding IF or IFNOT did not
+    '''
+    ifstack = kwargs['ifstack']
+    ifstack[-1] = None if ifstack[-1] in [True, None] else True
+
+def op_endif(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    end an IF or NOTIF block
+    '''
+    kwargs['ifstack'].pop()
+
+def op_return(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    used to mark the script as unspendable and optionally append data
+    '''
+    raise TransactionInvalidError('RETURN')
+
+def op_toaltstack(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    moves top of stack to top of altstack
+    '''
+    kwargs['altstack'].append(stack.pop())
+
+def op_add(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    add top two numbers on stack and push the sum
+    '''
+    stack.append(bytevector(number(stack.pop()) + number(stack.pop())))
+
+# end of script ops
+# now some helper functions for the script ops
 
 def bytevector(number):
     '''
@@ -986,39 +1040,6 @@ def number(bytestring):
     sign, msbs = bool(msbs & 0x80), msbs & 0x7f
     bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
     return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
-
-def op_reserved(opcode, stack, script, **kwargs):
-    '''
-    reserved opcodes
-    '''
-    raise ReservedWordError('Reserved opcode 0x%x' % opcode)
-
-def op_if(opcode, stack, script, **kwargs):
-    '''
-    begin an IF-ELSE-ENDIF block
-    '''
-    kwargs['ifstack'].append(bool(stack.pop()))
-
-def op_notif(opcode, stack, script, **kwargs):
-    '''
-    begin a NOTIF-ELSE-ENDIF block
-    '''
-    kwargs['ifstack'].append(not bool(stack.pop()))
-
-def op_else(opcode, stack, script, **kwargs):
-    '''
-    perform following action only if preceding IF or IFNOT did not
-    '''
-    ifstack = kwargs['ifstack']
-    ifstack[-1] = None if ifstack[-1] in [True, None] else True
-
-def op_endif(opcode, stack, script, **kwargs):
-    '''
-    end an IF or NOTIF block
-    '''
-    kwargs['ifstack'].pop()
-
-# end of script ops
 
 def serialize(lists):
     '''

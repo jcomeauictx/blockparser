@@ -676,10 +676,10 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     >>> logging.info('script: %r', script)
     >>> stack = []
     >>> run(script, None, None, None, stack)
-    >>> stack
-    [6]
+    >>> number(stack.pop())
+    6
     '''
-    stack = stack or []  # you can pass in a stack from previous script
+    stack = stack if stack is not None else []  # continues using existing stack
     logging.debug('stack at start of run: %s', stack)
     kwargs = {}
     kwargs['altstack'] = []

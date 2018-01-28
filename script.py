@@ -248,64 +248,63 @@ SCRIPT_OPS += (
     ),
     (0x84, [
         'AND',
-        'stack.append(stack.pop() & stack.pop())',
-        'pass']
+        'op_and',
+        'op_nop']
     ),
     (0x85, [
         'OR',
-        'stack.append(stack.pop() | stack.pop())',
-        'pass']
+        'op_or',
+        'op_nop']
     ),
     (0x86, [
         'XOR',
-        'stack.append(stack.pop() ^ stack.pop())',
-        'pass']
+        'op_xor',
+        'op_nop']
     ),
     (0x87, [
         'EQUAL',
-        'stack.append(stack.pop() == stack.pop())',
-        'pass']
+        'op_equal',
+        'op_nop']
     ),
     (0x88, [
         'EQUALVERIFY',
-        ('if stack.pop() != stack.pop():'
-         " raise(TransactionInvalidError('failed EQUALVERIFY'))"),
-        'pass']
+        'op_equalverify',
+        'op_nop']
     ),
     (0x89, [
         'RESERVED1',
-        "raise(ReservedWordError('reserved opcode 0x89'))",
-        'pass'],
+        'reserved',
+        'op_nop']
     ),
     (0x8a, [
         'RESERVED2',
-        "raise(ReservedWordError('reserved opcode 0x8a'))",
-        'pass']
+        'reserved',
+        'op_nop']
     ),
     (0x8b, [
         '1ADD',
-        'stack[-1] += 1',
-        'pass']
+        'op_1add',
+        'op_nop']
     ),
     (0x8c, [
         '1SUB',
-        'stack[-1] -= 1',
-        'pass']
+        'op_1sub',
+        'op_nop']
     ),
     (0x8d, [
         '2MUL',
-        'stack[-1] *= 2',
-        'pass']
+        'op_2mul',
+        'op_nop']
     ),
     (0x8e, [
         '2DIV',
-        'stack[-1] //= 2',
-        'pass']
+        'op_2div',
+        'op_nop']
     ),
     (0x8f, [
         'NEGATE',
-        'stack[-1] = -stack[-1]',
-        'pass']
+        'op_negate',
+        'op_nop']
     ),
     (0x90, [
         'ABS',
@@ -1278,6 +1277,53 @@ def op_equalverify(opcode=None, stack=None, script=None, **kwargs):
 # if any input value for any of these arithmetic commands is longer
 # than 4 bytes, the script must abort and fail. if any opcode marked
 # as disabled is present in a script - it must also abort and fail.
+
+def op_1add(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    1 is added to the input
+    '''
+    stack.append(b'\1')
+    op_add(stack=stack)
+
+def op_1sub(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    1 is subtracted from the input
+    '''
+    stack.append(b'\x81')
+    op_add(stack=stack)
+
+def op_2mul(opcode=None, stack=None, script=None, **kwargs):
+    r'''
+    the input is multiplied by 2 (disabled in bitcoin-core)
+
+    >>> stack = [b'\x03']
+    >>> op_2mul(stack=stack)
+    >>> stack
+    [b'\x06']
+    '''
+    stack.append(bytevector(number(stack.pop()) * 2))
+
+def op_2div(opcode=None, stack=None, script=None, **kwargs):
+    r'''
+    the input is divided by 2 (disabled in bitcoin-core)
+
+    >>> stack = [b'\x03']
+    >>> op_2div(stack=stack)
+    >>> stack
+    [b'\x01']
+    '''
+    stack.append(bytevector(number(stack.pop()) // 2))
+
+def op_negate(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the sign of the input is flipped
+
+    >>> stack = [b'\x03']
+    >>> op_negate(stack=stack)
+    >>> stack
+    [b'\x83']
+    '''
+    stack.append(bytevector(-number(stack.pop())))
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

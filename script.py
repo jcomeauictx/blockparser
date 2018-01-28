@@ -128,28 +128,28 @@ SCRIPT_OPS += (
     ),
     (0x6c, [
         'FROMALTSTACK',
-        'stack.append(altstack.pop()',
-        'pass']
+        'op_fromaltstack'
+        'op_nop']
     ),
     (0x6d, [
         '2DROP',
-        'stack[-2:] = []',
-        'pass']
+        'op_2drop',
+        'op_nop']
     ),
     (0x6e, [
         '2DUP',
-        'stack.extend(stack[-2:])',
-        'pass']
+        'op_2dup',
+        'op_nop']
     ),
     (0x6f, [
         '3DUP',
-        'stack.extend(stack[-3:])',
-        'pass']
+        'op_3dup',
+        'op_nop']
     ),
     (0x70, [
         '2OVER',
-        'stack.extend(stack[-4:-2])',
-        'pass']
+        'op_2over',
+        'op_nop']
     ),
     (0x71, [
         '2ROT',
@@ -1007,6 +1007,36 @@ def op_toaltstack(opcode=None, stack=None, script=None, **kwargs):
     moves top of stack to top of altstack
     '''
     kwargs['altstack'].append(stack.pop())
+
+def op_fromaltstack(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    moves top of altstack to top of stack
+    '''
+    stack.append(altstack.pop())
+
+def op_2drop(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    drop top 2 items from stack
+    '''
+    stack[-2:] = []
+
+def op_2dup(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    duplicate top 2 stack items
+    '''
+    stack.extend(stack[-2:])
+
+def op_3dup(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    duplicate top 3 stack items
+    '''
+    stack.extend(stack[-3:])
+
+def op_2over(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    copy 2nd group of 2 items down to top of stack
+    '''
+    stack.extend(stack[-4:-2])
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

@@ -67,7 +67,7 @@ SCRIPT_OPS += tuple(  # 0x52 - 0x60 are OP_2 through OP_16
     (opcode, [
         'op_shownumber',
         'op_number',
-        'pass'])
+        'op_nop'])
     for opcode in range(0x52, 0x61)
 )
 SCRIPT_OPS += (
@@ -183,13 +183,13 @@ SCRIPT_OPS += (
     ),
     (0x77, [
         'NIP',
-        'stack.pop(-2)',
-        'pass']
+        'op_nip',
+        'op_nop']
     ),
     (0x78, [
         'OVER',
-        'stack.append(stack[-2])',
-        'pass']
+        'op_over',
+        'op_nop']
     ),
     (0x79, [
         'PICK',
@@ -1090,6 +1090,28 @@ def op_dup(opcode=None, stack=None, script=None, **kwargs):
     duplicates the top stack item
     '''
     stack.push(stack[-1])
+
+def op_nip(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    removes the second-to-top stack item
+
+    >>> stack = [1, 2, 3]
+    >>> op_nip(stack=stack)
+    >>> stack
+    [1, 3]
+    '''
+    stack.pop(-2)
+
+def op_over(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    copies the second-to-top stack item to the top
+
+    >>> stack = [1, 2, 3]
+    >>> op_over(stack=stack)
+    >>> stack
+    [1, 2, 3, 2]
+    '''
+    stack.append(stack[-2])
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

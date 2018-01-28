@@ -153,13 +153,13 @@ SCRIPT_OPS += (
     ),
     (0x71, [
         '2ROT',
-        'stack.extend(stack[-6:-4]); stack[-8:-6] = []',
+        'op_2rot',
         'pass']
     ),
     (0x72, [
         '2SWAP',
-        '_ = stack[-2:], stack[-4:-2] = stack[-4:-2], stack[-2:]',
-        'pass']
+        'op_2swap',
+        'op_nop']
     ),
     (0x73, [
         'IFDUP',
@@ -1034,9 +1034,32 @@ def op_3dup(opcode=None, stack=None, script=None, **kwargs):
 
 def op_2over(opcode=None, stack=None, script=None, **kwargs):
     '''
-    copy 2nd group of 2 items down to top of stack
+    copies the pair of items two spaces back in the stack to the front
     '''
     stack.extend(stack[-4:-2])
+
+def op_2rot(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the fifth and sixth items back are moved to the top of the stack
+
+    >>> stack = [1, 2, 3, 4, 5, 6]
+    >>> op_2rot(stack=stack)
+    >>> stack
+    [3, 4, 5, 6, 1, 2]
+    '''
+    stack.extend(stack[-6:-4])
+    stack[-8:-6] = []
+
+def op_2swap(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    swaps the top two pairs of items
+
+    >>> stack = [1, 2, 3, 4]
+    >>> op_2swap(stack=stack)
+    >>> stack
+    [3, 4, 1, 2]
+    '''
+    stack[-2:], stack[-4:-2] = stack[-4:-2], stack[-2:]
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

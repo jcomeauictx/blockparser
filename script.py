@@ -308,18 +308,18 @@ SCRIPT_OPS += (
     ),
     (0x90, [
         'ABS',
-        'stack[-1] = abs(stack[-1])',
-        'pass']
+        'op_abs',
+        'op_nop']
     ),
     (0x91, [
         'NOT',
-        'stack[-1] = not stack[-1]',
-        'pass']
+        'op_not',
+        'op_nop']
     ),
     (0x92, [
         '0NOTEQUAL',
-        'stack[-1] = bool(stack[-1])',
-        'pass']
+        'op_0notequal',
+        'op_nop']
     ),
     (0x93, [
         'ADD',
@@ -1324,6 +1324,26 @@ def op_negate(opcode=None, stack=None, script=None, **kwargs):
     [b'\x83']
     '''
     stack.append(bytevector(-number(stack.pop())))
+
+def op_abs(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the input is made positive
+    '''
+    stack.append(bytevector(abs(number(stack.pop))))
+
+def op_not(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    if the input is 0 or 1, it is flipped. otherwise the output will be 0.
+    '''
+    state = number(stack.pop())
+    stack.append(bytevector(not state) if state in [0, 1] else b'')
+
+def op_0notequal(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    returns 0 if the input is 0. 1 otherwise.
+    '''
+    argument = number(stack.pop())
+    stack.append(bytevector(bool(argument)))
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

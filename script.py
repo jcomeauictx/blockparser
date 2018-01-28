@@ -243,8 +243,8 @@ SCRIPT_OPS += (
     ),
     (0x83, [
         'INVERT',
-        'stack[-1] = ~stack[-1]',
-        'pass']
+        'op_invert',
+        'op_nop']
     ),
     (0x84, [
         'AND',
@@ -1063,7 +1063,7 @@ def op_depth(opcode=None, stack=None, script=None, **kwargs):
     '''
     puts the number of stack items onto the stack
     '''
-    stack.push(len(stack))
+    stack.append(len(stack))
 
 def op_drop(opcode=None, stack=None, script=None, **kwargs):
     '''
@@ -1075,7 +1075,7 @@ def op_dup(opcode=None, stack=None, script=None, **kwargs):
     '''
     duplicates the top stack item
     '''
-    stack.push(stack[-1])
+    stack.append(stack[-1])
 
 def op_nip(opcode=None, stack=None, script=None, **kwargs):
     '''
@@ -1225,6 +1225,60 @@ def op_size(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(len(stack[-1])))
 
+def op_invert(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    flips all of the bits in the input (disabled in bitcoin-core)
+    '''
+    top = number(stack.pop())
+    stack.append(bytevector(~top))
+
+def op_and(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    boolean AND between each bit in the inputs (disabled in bitcoin-core)
+    '''
+    operands = (number(stack.pop()), number(stack.pop()))
+    stack.append(bytevector(operands[0] & operands[1]))
+
+def op_or(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    boolean OR between each bit in the inputs (disabled in bitcoin-core)
+    '''
+    operands = (number(stack.pop()), number(stack.pop()))
+    stack.append(bytevector(operands[0] | operands[1]))
+
+def op_xor(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    boolean XOR between each bit in the inputs (disabled in bitcoin-core)
+    '''
+    operands = (number(stack.pop()), number(stack.pop()))
+    stack.append(bytevector(operands[0] ^ operands[1]))
+
+def op_equal(opcode=None, stack=None, script=None, **kwargs):
+    r'''
+    returns 1 if the inputs are exactly equal, 0 otherwise
+
+    >>> stack = [b'', b'\x80']
+    >>> op_equal(stack=stack)
+    >>> stack
+    [b'\x01']
+    '''
+    operands = (number(stack.pop()), number(stack.pop()))
+    stack.append(bytevector(operands[0] == operands[1]))
+
+def op_equalverify(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    same as op_equal, but runs op_verify afterward
+    '''
+    op_equal(stack==stack)
+    op_verify(stack==stack)
+
+# arithmetic inputs are limited to signed 32-bit integers,
+# but may overflow their output.
+
+# if any input value for any of these arithmetic commands is longer
+# than 4 bytes, the script must abort and fail. if any opcode marked
+# as disabled is present in a script - it must also abort and fail.
+
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''
     add top two numbers on stack and push the sum
@@ -1269,6 +1323,8 @@ def number(bytestring):
         sign, msbs = bool(msbs & 0x80), msbs & 0x7f
         bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
         return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
+    except IndexError:
+        return 0
     except TypeError:
         return bytestring
 

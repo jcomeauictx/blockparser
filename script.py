@@ -328,33 +328,33 @@ SCRIPT_OPS += (
     ),
     (0x94, [
         'SUB',
-        'stack.append(-stack.pop() + stack.pop())',
-        'pass']
+        'op_sub',
+        'op_nop']
     ),
     (0x95, [
         'MUL',
-        '_ = stack.pop(); stack[-1] *= _',
-        'pass']
+        'op_mul',
+        'op_nop']
     ),
     (0x96, [
         'DIV',
-        '_ = stack.pop(); stack[-1] //= _',
-        'pass']
+        'op_div',
+        'op_nop']
     ),
     (0x97, [
         'MOD',
-        '_ = stack.pop(); stack[-1] %= _',
-        'pass']
+        'op_mod',
+        'op_nop']
     ),
     (0x98, [
         'LSHIFT',
-        '_ = stack.pop(); stack[-1] <<= _',
-        'pass']
+        'op_lshift',
+        'op_nop']
     ),
     (0x99, [
         'RSHIFT',
-        '_ = stack.pop(); stack[-1] >>= _',
-        'pass']
+        'op_rshift',
+        'op_nop']
     ),
     (0x9a, [
         'BOOLAND',
@@ -366,7 +366,6 @@ SCRIPT_OPS += (
         '_ = stack.pop(); stack[-1] = stack[-1] or _',
         'pass']
     ),
-    # FIXME: all numeric ops need to treat byte vectors correctly as numbers
     (0x9c, [
         'NUMEQUAL',
         'stack.append(stack.pop() == stack.pop())',
@@ -1347,9 +1346,51 @@ def op_0notequal(opcode=None, stack=None, script=None, **kwargs):
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''
-    add top two numbers on stack and push the sum
+    add top two numbers on stack
     '''
     stack.append(bytevector(number(stack.pop()) + number(stack.pop())))
+
+def op_sub(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top two stack items [a, b], a - b
+    '''
+    stack.append(bytevector(-number(stack.pop()) + number(stack.pop())))
+
+def op_mul(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    product of top 2 stack items (disabled in bitcoin-core)
+    '''
+    stack.append(bytevector(number(stack.pop()) * number(stack.pop())))
+
+def op_div(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b] return a // b (disabled in bitcoin-core)
+    '''
+    divisor = number(stack.pop())
+    stack.append(bytevector(number(stack.pop()) // divisor))
+
+def op_mod(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b] return a % b (disabled in bitcoin-core)
+    '''
+    divisor = number(stack.pop())
+    stack.append(bytevector(number(stack.pop()) % divisor))
+
+def op_lshift(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b] return a << b, preserving sign
+    (disabled in bitcoin-core)
+    '''
+    amount = number(stack.pop())
+    stack.append(bytevector(number(stack.pop()) << amount))
+
+def op_rshift(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b] return a >> b preserving sign
+    (disabled in bitcoin-core)
+    '''
+    amount = number(stack.pop())
+    stack.append(bytevector(number(stack.pop()) >> amount))
 
 # end of script ops
 # now some helper functions for the script ops

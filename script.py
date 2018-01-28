@@ -154,7 +154,7 @@ SCRIPT_OPS += (
     (0x71, [
         '2ROT',
         'op_2rot',
-        'pass']
+        'op_nop']
     ),
     (0x72, [
         '2SWAP',
@@ -163,23 +163,23 @@ SCRIPT_OPS += (
     ),
     (0x73, [
         'IFDUP',
-        'if stack[-1]: stack.append(stack[-1])',
-        'pass']
+        'op_ifdup',
+        'op_nop']
     ),
     (0x74, [
         'DEPTH',
-        'stack.append(len(stack))',
-        'pass']
+        'op_depth',
+        'op_nop']
     ),
     (0x75, [
         'DROP',
-        'stack.pop()',
-        'pass']
+        'op_drop',
+        'op_nop']
     ),
     (0x76, [
         'DUP',
-        'stack.append(stack[-1])',
-        'pass']
+        'op_dup',
+        'op_nop']
     ),
     (0x77, [
         'NIP',
@@ -1023,6 +1023,11 @@ def op_2drop(opcode=None, stack=None, script=None, **kwargs):
 def op_2dup(opcode=None, stack=None, script=None, **kwargs):
     '''
     duplicate top 2 stack items
+
+    >>> stack = [None, 1, 2]
+    >>> op_2dup(stack=stack)
+    >>> stack
+    [None, 1, 2, 1, 2]
     '''
     stack.extend(stack[-2:])
 
@@ -1060,6 +1065,31 @@ def op_2swap(opcode=None, stack=None, script=None, **kwargs):
     [3, 4, 1, 2]
     '''
     stack[-2:], stack[-4:-2] = stack[-4:-2], stack[-2:]
+
+def op_ifdup(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    if the top stack value is not 0, duplicate it
+    '''
+    if stack[-1]:
+        stack.append(stack[-1])
+
+def op_depth(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    puts the number of stack items onto the stack
+    '''
+    stack.push(len(stack))
+
+def op_drop(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    removes the top stack item
+    '''
+    stack.pop()
+
+def op_dup(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    duplicates the top stack item
+    '''
+    stack.push(stack[-1])
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

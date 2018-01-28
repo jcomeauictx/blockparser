@@ -358,64 +358,63 @@ SCRIPT_OPS += (
     ),
     (0x9a, [
         'BOOLAND',
-        '_ = stack.pop(); stack[-1] = stack[-1] and _',
-        'pass']
+        'op_booland',
+        'op_nop']
     ),
     (0x9b, [
         'BOOLOR',
-        '_ = stack.pop(); stack[-1] = stack[-1] or _',
-        'pass']
+        'op_boolor',
+        'op_nop']
     ),
     (0x9c, [
         'NUMEQUAL',
-        'stack.append(stack.pop() == stack.pop())',
-        'pass']
+        'op_numequal',
+        'op_nop']
     ),
     (0x9d, [
         'NUMEQUALVERIFY',
-        'stack.append(stack.pop() == stack.pop()); verify(**globals())',
-        'pass']
+        'op_numequalverify',
+        'op_nop']
     ),
     (0x9e, [
         'NUMNOTEQUAL',
-        'stack.append(stack.pop() != stack.pop())',
-        'pass']
+        'op_numnotequal',
+        'op_nop']
     ),
     (0x9f, [
         'LESSTHAN',
-        'stack.append(stack.pop() > stack.pop())',
-        'pass']
+        'op_lessthan',
+        'op_nop']
     ),
     (0xa0, [
         'GREATERTHAN',
-        'stack.append(stack.pop() < stack.pop())',
-        'pass']
+        'op_greaterthan',
+        'op_nop']
     ),
     (0xa1, [
         'LESSTHANOREQUAL',
-        'stack.append(stack.pop() >= stack.pop())',
-        'pass']
+        'op_lessthanorequal',
+        'op_nop']
     ),
     (0xa2, [
         'GREATERTHANOREQUAL',
-        'stack.append(stack.pop() <= stack.pop())',
-        'pass']
+        'op_greaterthanorequal',
+        'op_nop']
     ),
     (0xa3, [
         'MIN',
-        'stack.append(min(stack.pop(), stack.pop()))',
-        'pass']
+        'op_min',
+        'op_nop']
     ),
     (0xa4, [
         'MAX',
-        'stack.append(max(stack.pop(), stack.pop()))',
-        'pass']
+        'op_max',
+        'op_nop']
     ),
     (0xa5, [
         'WITHIN',
-        '_max = stack.pop(); _min = stack.pop();'
-        'stack.append(_min <= stack.pop() <= _max)',
-        'pass']
+        'op_within',
+        'op_nop']
     ),
     (0xa6, [
         'RIPEMD160',
@@ -1391,6 +1390,101 @@ def op_rshift(opcode=None, stack=None, script=None, **kwargs):
     '''
     amount = number(stack.pop())
     stack.append(bytevector(number(stack.pop()) >> amount))
+
+def op_booland(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: if both a and b are not 0, return 1, else 0
+    '''
+    stack.append(bytevector(number(stack.pop()) and number(stack.pop())))
+
+def op_boolor(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: if a or b is not 0, return 1, else 0
+    '''
+    stack.append(bytevector(number(stack.pop()) or number(stack.pop())))
+
+def op_numequal(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    returns 1 if numbers are equal, else 0
+    '''
+    stack.append(bytevector(number(stack.pop()) == number(stack.pop())))
+
+def op_numequalverify(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    same as op_numequal but runs op_verify afterward
+    '''
+    op_numequal(stack=stack)
+    op_verify(stack=stack)
+
+def op_numnotequal(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    return 1 if numbers are not equal, else 0
+    '''
+    stack.append(bytevector(number(stack.pop()) != number(stack.pop())))
+
+def op_lessthan(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: return 1 if a < b, else 0
+
+    because b is popped first, we compare using > instead of <
+    '''
+    stack.append(bytevector(number(stack.pop()) > number(stack.pop())))
+
+def op_greaterthen(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: return 1 if a > b, else 0
+
+    because b is popped first, we use the opposite check
+    '''
+    stack.append(bytevector(number(stack.pop()) < number(stack.pop())))
+
+def op_lessthanorequal(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: return 1 if a <= b, else 0
+
+    because b is popped first, we use the opposite check
+    '''
+    stack.append(bytevector(number(stack.pop()) >= number(stack.pop())))
+
+def op_greaterthanorequal(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: return 1 if a >= b, else 0
+
+    because b is popped first, we use the opposite check
+    '''
+    stack.append(bytevector(number(stack.pop()) <= number(stack.pop())))
+
+def op_min(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: return the smaller
+    '''
+    stack.append(bytevector(min(number(stack.pop()), number(stack.pop()))))
+
+def op_max(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    for top 2 stack items [a, b]: return the greater
+    '''
+    stack.append(bytevector(max(number(stack.pop()), number(stack.pop()))))
+
+def op_within(opcode=None, stack=None, script=None, **kwargs):
+    r'''
+    for top 3 stack items [x, min, max]: return 1 if x is within the
+    specified range (left-inclusive), else 0
+
+    >>> stack = [-1, 0, 4]
+    >>> op_within(stack=stack)
+    >>> stack
+    [b'']
+
+    >>> stack = [0, 0, 4]
+    >>> op_within(stack=stack)
+    >>> stack
+    [b'\x01']
+    '''
+    range_x = list(reversed([number(stack.pop()), number(stack.pop())]))
+    x = number(stack.pop())
+    logging.debug('checking if %d in range %s', x, range_x)
+    stack.append(bytevector(range_x[0] <= x < range_x[1]))
 
 # end of script ops
 # now some helper functions for the script ops

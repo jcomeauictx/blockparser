@@ -88,27 +88,28 @@ SCRIPT_OPS += (
     ),
     (0x64, [
         'NOTIF',
-        'pass']
+        'op_notif',
+        'op_nop']
     ),
     (0x65, [
         'VERIF',
-        "raise ReservedWordError('reserved opcode 0x65')",
-        'pass']
+        'op_reserved',
+        'op_nop']
     ),
     (0x66, [
         'VERNOTIF',
-        "raise ReservedWordError('reserved opcode 0x66')",
-        'pass']
+        'op_reserved',
+        'op_nop']
     ),
     (0x67, [
         'ELSE',
-        'ifstack[-1] = None if ifstack[-1] in [True, None] else True',
-        'pass']
+        'op_else',
+        'op_notif']
     ),
     (0x68, [
         'ENDIF',
-        'ifstack.pop()',
-        'pass']
+        'op_endif',
+        'op_nop']
     ),
     (0x69, [
         'VERIFY',
@@ -658,7 +659,7 @@ def parse(scriptbinary, display=True):
             if display_op in LOOKUP:
                 stack.append(display_op)
             else:
-                globals()[display_op](opcode, stack, script, **locals())
+                globals()[display_op](opcode, stack, script)
     if display:
         for index in range(len(stack)):
             print(stack[index])
@@ -677,15 +678,17 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     '''
     stack = stack or []  # you can pass in a stack from previous script
     logging.debug('stack at start of run: %s', stack)
-    altstack = []
-    mark = [0]  # append a mark for every OP_CODESEPARATOR found
+    kwargs = {}
+    kwargs['altstack'] = []
+    kwargs['mark'] = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
+    script = list(scriptbinary)  # gives list of numbers (`ord`s)
+    kwargs['reference'] = list(script)  # make a copy
+    kwargs['ifstack'] = []  # internal stack for each script
+
     for opcode in DISABLED:
         opcodes.pop(opcode)
     try:
-        script = list(scriptbinary)  # gives list of numbers (`ord`s)
-        reference = list(script)  # make a copy
-        ifstack = []  # internal stack for each script
         while script:
             opcode = script.pop(0)
             operation = opcodes.get(opcode, None)
@@ -693,12 +696,12 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
                 logging.error('fatal error in %s, offset %d', txnew, txindex)
                 raise NotImplementedError('no such opcode 0x%x' % opcode)
             else:
-                if ifstack and not ifstack[-1]:
+                if kwargs['ifstack'] and not kwargs['ifstack'][-1]:
                     run_op = operation[2]
                 else:
                     run_op = operation[1]
                 logging.info('running operation 0x%x, %s', opcode, run_op)
-                globals()[run_op](opcode, stack, script, **locals())
+                globals()[run_op](opcode, stack, script, **kwargs)
             logging.info('script: %r, stack: %s', script, stack)
     except (TransactionInvalidError, ReservedWordError) as failed:
         logging.error('script failed or otherwise invalid: %s', failed)
@@ -945,13 +948,13 @@ def op_1negate(opcode, stack, script, **kwargs):
     '''
     push -1 onto the stack
     '''
-    stack.push(b'\x81')
+    stack.append(b'\x81')
 
 def op_number(opcode, stack, script, **kwargs):
     '''
     push number from 1 ('TRUE') to 16 onto the stack
     '''
-    stack.push(bytes([opcode - 0x50]))
+    stack.append(bytes([opcode - 0x50]))
 
 def op_shownumber(opcode, stack, script, **kwargs):
     '''
@@ -1001,6 +1004,19 @@ def op_notif(opcode, stack, script, **kwargs):
     begin a NOTIF-ELSE-ENDIF block
     '''
     kwargs['ifstack'].append(not bool(stack.pop()))
+
+def op_else(opcode, stack, script, **kwargs):
+    '''
+    perform following action only if preceding IF or IFNOT did not
+    '''
+    ifstack = kwargs['ifstack']
+    ifstack[-1] = None if ifstack[-1] in [True, None] else True
+
+def op_endif(opcode, stack, script, **kwargs):
+    '''
+    end an IF or NOTIF block
+    '''
+    kwargs['ifstack'].pop()
 
 # end of script ops
 

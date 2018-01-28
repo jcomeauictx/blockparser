@@ -208,23 +208,23 @@ SCRIPT_OPS += (
     ),
     (0x7c, [
         'SWAP',
-        'stack.append(stack.pop(-2))',
-        'pass']
+        'op_swap',
+        'op_nop']
     ),
     (0x7d, [
         'TUCK',
-        'stack.insert(-2, stack[-1])',
-        'pass']
+        'op_tuck',
+        'op_nop']
     ),
     (0x7e, [
         'CAT',
-        '_ = stack.pop(); stack[-1] += _',
-        'pass']
+        'op_cat',
+        'op_nop']
     ),
     (0x7f, [
         'SUBSTR',
-        'substr(**globals())',
-        'pass']
+        'op_substr',
+        'op_nop']
     ),
     (0x80, [
         'LEFT',
@@ -495,7 +495,7 @@ SCRIPT_OPS += tuple(  # 0xb3 - 0xb9 are NOP_4 through NOP_10
 
 LOOKUP = dict([[value[0], key] for key, value in dict(SCRIPT_OPS).items()
               if re.compile('^-?[A-Z0-9]+$').match(value[0])])
-DISABLED = [  # add all opcodes disabled in Bitcoin core
+DISABLED = [  # add all opcodes disabled in bitcoin-core
 #    0x83, 0x84, 0x85, 0x86
 ]
 COINBASE = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
@@ -668,7 +668,7 @@ def parse(scriptbinary, display=True):
 
 def run(scriptbinary, txnew, txindex, parsed, stack=None):
     '''
-    executes scripts the same way (hopefully) as Bitcoin Core would
+    executes scripts the same way (hopefully) as bitcoin-core would
 
     showing stack at end of each operation
 
@@ -760,7 +760,7 @@ def addr_to_hash(address, check_validity=True):
             logging.error('%r != %r', check, checksum)
             raise ValueError('Invalid address %s' % address)
         if intermediate[0] not in b'\x00\x05':
-            logging.warning('%s not a Bitcoin mainnet address', address)
+            logging.warning('%s not a bitcoin mainnet address', address)
     return intermediate[1:]
 
 def hash_to_addr(hash160, padding=b'\0'):
@@ -800,20 +800,6 @@ def op_verify(opcode=None, stack=None, script=None, **kwargs):
     '''
     if not stack.pop():
         raise TransactionInvalidError('VERIFY failed')
-
-def substr(stack=None, **ignored):
-    '''
-    substring of given string, given start and length
-
-    >>> substr(stack=['testcase', 0, 4])
-    'test'
-    >>> substr(stack=['testcase', 4, 4])
-    'case'
-    '''
-    length = stack.pop()
-    beginning = stack.pop()
-    stack[-1] = stack[-1][beginning:beginning + length]
-    return stack[-1]  # for conventional caller
 
 def hash256(stack=None, hashlib=hashlib, **ignored):
     '''
@@ -1145,6 +1131,55 @@ def op_rot(opcode=None, stack=None, script=None, **kwargs):
     [2, 3, 1]
     '''
     stack.append(stack.pop(-3))
+
+def op_swap(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the top two items on the stack are swapped
+
+    >>> stack = [1, 2, 3]
+    >>> op_swap(stack=stack)
+    >>> stack
+    [1, 3, 2]
+    '''
+    stack.append(stack.pop(-2))
+
+def op_tuck(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the item at the top of the stack is copied and inserted before the
+    second-to-top item
+
+    >>> stack = [1, 2, 3]
+    >>> op_tuck(stack=stack)
+    >>> stack
+    [1, 3, 2, 3]
+    '''
+    stack.insert(-2, stack[-1])
+
+def op_cat(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    concatenates two strings (disabled in bitcoin-core)
+
+    >>> stack = [b'abc', b'de']
+    >>> op_cat(stack=stack)
+    >>> stack
+    [b'abcde']
+    '''
+    suffix = stack.pop()
+    stack[-1] += suffix
+
+def op_substr(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    returns a section of a string (disabled in bitcoin-core)
+
+    >>> op_substr(stack=['testcase', 0, 4])
+    'test'
+    >>> op_substr(stack=['testcase', 4, 4])
+    'case'
+    '''
+    length = stack.pop()
+    beginning = stack.pop()
+    stack[-1] = stack[-1][beginning:beginning + length]
+    return stack[-1]  # for conventional caller
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

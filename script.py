@@ -1146,31 +1146,20 @@ def number(bytestring):
     bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
     return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
 
-def serialize(lists):
-    '''
-    convert multi-level list to bytestring
-    '''
-    serialized = b''
-    logging.debug('serializing object: %s', lists)
-    for item in lists:
-        logging.debug('serializing item: %s', item)
-        if type(item) == list:
-            serialized += serialize(item)
-        else:
-            #logging.debug('assuming %s is bytes', item)
-            serialized += item
-    logging.debug('serialized: %s', b2a_hex(serialized))
-    return serialized
-
 def tx_serialize(transaction):
     '''
     optimized `serialize` for this particular representation of transaction
 
-    WARNING: side effect: modifies `transaction`, it will remain "flattened"
+    >>> transaction = PIZZA[0]
+    >>> check = copy.deepcopy(transaction)
+    >>> serialized = tx_serialize(transaction)
+    >>> check == transaction
+    True
     '''
-    transaction[2] = b''.join([b''.join(item) for item in transaction[2]])
-    transaction[4] = b''.join([b''.join(item) for item in transaction[4]])
-    return b''.join(transaction)
+    copied = list(transaction)
+    copied[2] = b''.join([b''.join(item) for item in copied[2]])
+    copied[4] = b''.join([b''.join(item) for item in copied[4]])
+    return b''.join(copied)
 
 def test_checksig(current_tx, txin_index, previous_tx):
     '''

@@ -193,18 +193,18 @@ SCRIPT_OPS += (
     ),
     (0x79, [
         'PICK',
-        'stack.append(stack[-1 - stack.pop())]',
-        'pass']
+        'op_pick',
+        'op_nop']
     ),
     (0x7a, [
         'ROLL',
-        'stack.append(stack.pop(stack[-1 - stack.pop()]))',
-        'pass']
+        'op_roll',
+        'op_nop']
     ),
     (0x7b, [
         'ROT',
-        'stack.append(stack.pop(-3))',
-        'pass']
+        'op_rot',
+        'op_nop']
     ),
     (0x7c, [
         'SWAP',
@@ -1112,6 +1112,39 @@ def op_over(opcode=None, stack=None, script=None, **kwargs):
     [1, 2, 3, 2]
     '''
     stack.append(stack[-2])
+
+def op_pick(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the item n back in the stack is copied to the top
+
+    >>> stack = [1, 2, 3, 2]
+    >>> op_pick(stack=stack)
+    >>> stack
+    [1, 2, 3, 1]
+    '''
+    stack.append(stack[-1 - stack.pop()])
+
+def op_roll(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the item n back in the stack is moved to the top
+
+    >>> stack = [1, 2, 3, 2]
+    >>> op_roll(stack=stack)
+    >>> stack
+    [2, 3, 1]
+    '''
+    stack.append(stack.pop(-1 - stack.pop()))
+
+def op_rot(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    the top 3 items on the stack are rotated to the left
+
+    >>> stack = [1, 2, 3]
+    >>> op_rot(stack=stack)
+    >>> stack
+    [2, 3, 1]
+    '''
+    stack.append(stack.pop(-3))
 
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''

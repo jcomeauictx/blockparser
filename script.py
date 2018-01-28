@@ -228,8 +228,8 @@ SCRIPT_OPS += (
     ),
     (0x80, [
         'LEFT',
-        '_ = stack.pop(); stack[-1] = stack[-1][:_]',
-        'pass']
+        'op_left',
+        'op_nop']
     ),
     (0x81, [
         'RIGHT',
@@ -1181,6 +1181,19 @@ def op_substr(opcode=None, stack=None, script=None, **kwargs):
     stack[-1] = stack[-1][beginning:beginning + length]
     return stack[-1]  # for conventional caller
 
+def op_left(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    keeps only characters left of the specified point in a string
+    disabled in bitcoin-core
+
+    >>> stack = [b'this is a test', b'\4']
+    >>> op_left(stack=stack)
+    >>> stack
+    [b'this']
+    '''
+    length = number(stack.pop());
+    stack[-1] = stack[-1][:length]
+
 def op_add(opcode=None, stack=None, script=None, **kwargs):
     '''
     add top two numbers on stack and push the sum
@@ -1206,13 +1219,25 @@ def bytevector(number):
     return vector
 
 def number(bytestring):
-    '''
+    r'''
     treat bytestring as a number according to Script rules
+
+    also accepts integers as they are, for testing purposes
+
+    >>> number(b'\x80')
+    0
+    >>> number(b'\xe8\x83')
+    -1000
+    >>> number(3)
+    3
     '''
-    msbs = bytestring[-1]
-    sign, msbs = bool(msbs & 0x80), msbs & 0x7f
-    bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
-    return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
+    try:
+        msbs = bytestring[-1]
+        sign, msbs = bool(msbs & 0x80), msbs & 0x7f
+        bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
+        return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
+    except TypeError:
+        return bytestring
 
 def tx_serialize(transaction):
     '''
@@ -1363,6 +1388,17 @@ def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
                 if len(cache) > maxlength:
                     cache.pop(list(cache.keys())[0])
                 return tx
+
+# make sure assertions work even if optimized
+try:
+    assert 1 == 0  # check if running optimized
+    # the above would have raised an AssertionError if not
+    def assert_true(statement):
+        if not statement:
+            raise AssertionError
+except AssertionError:
+    def assert_true(statement):
+        assert(statement)
 
 if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG

@@ -96,7 +96,7 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
     height = 0
     reversemagic = dict([[value, key] for key, value in MAGIC.items()])
-    blockfiles = [blockfiles] if blockfiles else DEFAULT
+    blockfiles = blockfiles or DEFAULT
     # if file was specified on commandline, make it into a list
     for blockfile in blockfiles:
         magic = ''
@@ -144,18 +144,19 @@ def parse_blockheader(blockheader):
     previous_blockhash = blockheader[4:36]
     merkle_root = blockheader[36:68]
     unix_time = blockheader[68:72]
-    target_nbits = blockheader[72:76]
+    nbits = blockheader[72:76]
     nonce = blockheader[76:]
+    blockhash = get_hash(blockheader)
     if len(nonce) != 4:
         raise ValueError('Nonce wrong size: %d bytes' % len(nonce))
     logging.info('block version: %s', show_long(version))
     logging.info('previous block hash: %s', show_hash(previous_blockhash))
     logging.info('merkle root: %s', show_hash(merkle_root))
     logging.info('unix time: %s', timestamp(unix_time))
-    logging.info('target_nbits: %r', to_hex(target_nbits))
+    logging.info('nbits: %r', to_hex(nbits))
     logging.info('nonce: %s', to_hex(nonce))
-    logging.info('block hash: %s', show_hash(get_hash(blockheader)))
-    return version, previous_blockhash, merkle_root, target_nbits, nonce
+    logging.info('block hash: %s', show_hash(blockhash))
+    return version, previous_blockhash, merkle_root, nbits, nonce, blockhash
 
 def to_long(bytestring):
     '''
@@ -222,6 +223,32 @@ def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             raw_transaction, transaction, data = parse_transaction(data)
             txhash = get_hash(raw_transaction)
             yield height, txhash, transaction
+
+def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+    '''
+    removes orphan blocks and corrects height
+    '''
+    logging.debug('blockfiles: %s', blockfiles)
+    blockfiles = blockfiles or DEFAULT
+    blocks = nextblock(blockfiles, minblock, maxblock)
+    order = [b'\0' * 32]  # should only be seen in genesis block
+    orphans = {}
+    for height, header, transactions in blocks:
+        parsed = parse_blockheader(header)
+        previous_blockhash, blockhash = parsed[1], parsed[5]
+        if previous_blockhash != order[-1]:
+            logging.warning('out of order block %r', blockhash)
+            if previous_blockhash not in order:
+                logging.warning('orphan block: %r', blockhash)
+                orphans[blockhash] = previous_hash
+                logging.info('orphans: %s', orphans)
+            else:
+                logging.warning('reordering blockchain')
+                logging.warning('current [false] height: %d', len(order) - 2)
+                order[order.index(previous_hash) + 1:] = []
+        order.append(blockhash)
+        logging.info('current [real] height: %d out of %d',
+                     len(order) - 2, height)
 
 def parse_transaction(data):
     '''
@@ -353,4 +380,7 @@ def varint_length(data):
         return b'\xff' + struct.pack('<Q', length)
 
 if __name__ == '__main__':
-    parse((sys.argv + [None])[1], *sys.argv[2:])
+    blockparse = parse
+    COMMAND = os.path.splitext(os.path.split(sys.argv[0])[1])[0]
+    BLOCKFILES = [sys.argv[1]] if len(sys.argv) > 1 else DEFAULT
+    eval(COMMAND)(BLOCKFILES, *sys.argv[2:])

@@ -1777,7 +1777,7 @@ if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     command, args = (sys.argv + [None])[1], sys.argv[2:]
     # some commands expect a list
-    if command in ['script_compile', 'op_hash160']:
+    if command in ['script_compile'] or command.startswith('op_'):
         print(globals()[command]([bytes(s, 'utf8') for s in args]))
     elif command in globals() and callable(globals()[command]):
         print(globals()[command](*args))

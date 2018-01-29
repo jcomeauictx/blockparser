@@ -640,12 +640,13 @@ def parse(scriptbinary, display=True):
     returns same-sized list of opcodes parsed from script
     '''
     stack = []
+    kwargs = {}
     opcodes = dict(SCRIPT_OPS)
-    script = list(scriptbinary)  # gives list of numbers (`ord`s)
+    kwargs['script'] = script = list(scriptbinary)  # gives list of `ord`s
     parsed = [None] * len(script)
     while script:
         parsed[-len(script)] = script[0]
-        opcode = script.pop(0)
+        kwargs['opcode'] = opcode = script.pop(0)
         operation = opcodes.get(opcode, None)
         logging.debug('opcode: %r, operation: %r', opcode, operation)
         if operation is None:
@@ -656,7 +657,7 @@ def parse(scriptbinary, display=True):
             if display_op in LOOKUP:
                 stack.append(display_op)
             else:
-                globals()[display_op](opcode, stack, script)
+                globals()[display_op](stack, **kwargs)
     if display:
         for index in range(len(stack)):
             print(stack[index])
@@ -683,7 +684,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     kwargs['altstack'] = []
     kwargs['mark'] = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
-    script = list(scriptbinary)  # gives list of numbers (`ord`s)
+    kwargs['script'] = script = list(scriptbinary)  # list of `ord`s
     kwargs['reference'] = list(script)  # make a copy
     kwargs['ifstack'] = []  # internal stack for each script
 
@@ -691,7 +692,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
         opcodes.pop(opcode)
     try:
         while script:
-            opcode = script.pop(0)
+            kwargs['opcode'] = opcode = script.pop(0)
             operation = opcodes.get(opcode, None)
             if operation is None:
                 logging.error('fatal error in %s, offset %d', txnew, txindex)
@@ -702,7 +703,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
                 else:
                     run_op = operation[1]
                 logging.info('running operation 0x%x, %s', opcode, run_op)
-                globals()[run_op](opcode, stack, script, **kwargs)
+                globals()[run_op](stack, **kwargs)
             logging.info('script: %r, stack: %s', script, stack)
     except (TransactionInvalidError, ReservedWordError) as failed:
         logging.error('script failed or otherwise invalid: %s', failed)
@@ -792,141 +793,148 @@ def pubkey_to_hash(pubkey):
 # the following are the actual script operations, called from `run` routine.
 # they all have the same parameter list
 
-def op_nop(opcode=None, stack=None, script=None, **kwargs):
+def op_nop(stack=None, **kwargs):
     '''
     handles all no-ops
     '''
     pass
 
-def skip(opcode=None, stack=None, script=None, **kwargs):
+def skip(stack=None, **kwargs):
     '''
     for use in an unused conditional branch; drops data instead of pushing it
+
+    (not a real script operation)
     '''
     trash = []
+    opcode = kwargs['opcode']
     if opcode < 0x4c:
-        op_pushdata(opcode, trash, script, **kwargs)
+        op_pushdata(trash, **kwargs)
     else:
         function = [op_pushdata1, op_pushdata2, op_pushdata4][opcode - 0x4c]
-        function(opcode, trash, script, **kwargs)
+        function(trash, **kwargs)
 
-def op_false(opcode=None, stack=None, script=None, **kwargs):
+def op_false(stack=None, **kwargs):
     '''
     pushes a zero-length bytestring that indicates False
     '''
     stack.append(b'')
 
-def op_pushdata(opcode=None, stack=None, script=None, **kwargs):
+def op_pushdata(stack=None, **kwargs):
     '''
     handles all the data-pushing operations 0x1 - 0x4b
 
     see the `Constants` section of https://en.bitcoin.it/wiki/Script
     '''
+    logging.debug('kwargs: %s', kwargs)
+    script = kwargs['script']
+    opcode = kwargs['opcode']
     stack.append(bytes(script.pop(0) for i in range(opcode)))
 
-def op_pushdata1(opcode=None, stack=None, script=None, **kwargs):
+def op_pushdata1(stack=None, **kwargs):
     '''
     pushes up to 255 bytes of data according to next byte in script
     '''
-    count = script.pop(0)
-    op_pushdata(count, stack, script, **kwargs)
+    count = kwargs['script'].pop(0)
+    op_pushdata(stack, opcode=count, script=kwargs['script'])
 
-def op_pushdata2(opcode=None, stack=None, script=None, **kwargs):
+def op_pushdata2(stack=None, **kwargs):
     '''
     pushes up to 65535 bytes of data according to next 2 bytes in script
     '''
-    count = script.pop(0)
-    count += 0x100 * script.pop(0)
-    op_pushdata(count, stack, script, **kwargs)
+    count = kwargs['script'].pop(0)
+    count += 0x100 * kwargs['script'].pop(0)
+    op_pushdata(stack, opcode=count, script=kwargs['script'])
 
-def op_pushdata4(opcode=None, stack=None, script=None, **kwargs):
+def op_pushdata4(stack=None, **kwargs):
+    script = kwargs['script']
     count = script.pop(0)
     count += 0x100 + script.pop(0)
     count += 0x10000 + script.pop(0)
     count += 0x1000000 + script.pop(0)
-    op_pushdata(count, stack, script, **kwargs)
+    op_pushdata(stack, opcode=count, script=script)
 
-def op_1negate(opcode=None, stack=None, script=None, **kwargs):
+def op_1negate(stack=None, **kwargs):
     '''
     push -1 onto the stack
     '''
     stack.append(b'\x81')
 
-def op_number(opcode=None, stack=None, script=None, **kwargs):
+def op_number(stack=None, **kwargs):
     '''
     push number from 1 ('TRUE') to 16 onto the stack
     '''
-    stack.append(bytes([opcode - 0x50]))
+    stack.append(bytes([kwargs['opcode'] - 0x50]))
 
-def op_shownumber(opcode=None, stack=None, script=None, **kwargs):
+def op_shownumber(stack=None, **kwargs):
     '''
     like op_number, but unpack it for display of script
     '''
-    op_number(opcode, stack, script, **kwargs)
+    op_number(stack, **kwargs)
     stack.append(number(stack.pop()))
 
-def op_reserved(opcode=None, stack=None, script=None, **kwargs):
+def op_reserved(stack=None, **kwargs):
     '''
     reserved opcodes
     '''
-    raise ReservedWordError('Reserved opcode 0x%x' % opcode)
+    raise ReservedWordError('Reserved opcode 0x%x' % kwargs['opcode'])
 
-def op_if(opcode=None, stack=None, script=None, **kwargs):
+def op_if(stack=None, **kwargs):
     '''
     begin an IF-ELSE-ENDIF block
     '''
     kwargs['ifstack'].append(bool(stack.pop()))
 
-def op_notif(opcode=None, stack=None, script=None, **kwargs):
+def op_notif(stack=None, **kwargs):
     '''
     begin a NOTIF-ELSE-ENDIF block
     '''
     kwargs['ifstack'].append(not bool(stack.pop()))
 
-def op_else(opcode=None, stack=None, script=None, **kwargs):
+def op_else(stack=None, **kwargs):
     '''
     perform following action only if preceding IF or IFNOT did not
     '''
     ifstack = kwargs['ifstack']
     ifstack[-1] = None if ifstack[-1] in [True, None] else True
 
-def op_endif(opcode=None, stack=None, script=None, **kwargs):
+def op_endif(stack=None, **kwargs):
     '''
     end an IF or NOTIF block
     '''
     kwargs['ifstack'].pop()
 
-def op_verify(opcode=None, stack=None, script=None, **kwargs):
+def op_verify(stack=None, **kwargs):
     '''
     raise Exception if top of stack isn't a Boolean "true"
     '''
     if not stack.pop():
         raise TransactionInvalidError('VERIFY failed')
 
-def op_return(opcode=None, stack=None, script=None, **kwargs):
+def op_return(stack=None, **kwargs):
     '''
     used to mark the script as unspendable and optionally append data
     '''
     raise TransactionInvalidError('RETURN')
 
-def op_toaltstack(opcode=None, stack=None, script=None, **kwargs):
+def op_toaltstack(stack=None, **kwargs):
     '''
     moves top of stack to top of altstack
     '''
     kwargs['altstack'].append(stack.pop())
 
-def op_fromaltstack(opcode=None, stack=None, script=None, **kwargs):
+def op_fromaltstack(stack=None, **kwargs):
     '''
     moves top of altstack to top of stack
     '''
     stack.append(altstack.pop())
 
-def op_2drop(opcode=None, stack=None, script=None, **kwargs):
+def op_2drop(stack=None, **kwargs):
     '''
     drop top 2 items from stack
     '''
     stack[-2:] = []
 
-def op_2dup(opcode=None, stack=None, script=None, **kwargs):
+def op_2dup(stack=None, **kwargs):
     '''
     duplicate top 2 stack items
 
@@ -937,19 +945,19 @@ def op_2dup(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.extend(stack[-2:])
 
-def op_3dup(opcode=None, stack=None, script=None, **kwargs):
+def op_3dup(stack=None, **kwargs):
     '''
     duplicate top 3 stack items
     '''
     stack.extend(stack[-3:])
 
-def op_2over(opcode=None, stack=None, script=None, **kwargs):
+def op_2over(stack=None, **kwargs):
     '''
     copies the pair of items two spaces back in the stack to the front
     '''
     stack.extend(stack[-4:-2])
 
-def op_2rot(opcode=None, stack=None, script=None, **kwargs):
+def op_2rot(stack=None, **kwargs):
     '''
     the fifth and sixth items back are moved to the top of the stack
 
@@ -961,7 +969,7 @@ def op_2rot(opcode=None, stack=None, script=None, **kwargs):
     stack.extend(stack[-6:-4])
     stack[-8:-6] = []
 
-def op_2swap(opcode=None, stack=None, script=None, **kwargs):
+def op_2swap(stack=None, **kwargs):
     '''
     swaps the top two pairs of items
 
@@ -972,32 +980,32 @@ def op_2swap(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack[-2:], stack[-4:-2] = stack[-4:-2], stack[-2:]
 
-def op_ifdup(opcode=None, stack=None, script=None, **kwargs):
+def op_ifdup(stack=None, **kwargs):
     '''
     if the top stack value is not 0, duplicate it
     '''
     if stack[-1]:
         stack.append(stack[-1])
 
-def op_depth(opcode=None, stack=None, script=None, **kwargs):
+def op_depth(stack=None, **kwargs):
     '''
     puts the number of stack items onto the stack
     '''
     stack.append(len(stack))
 
-def op_drop(opcode=None, stack=None, script=None, **kwargs):
+def op_drop(stack=None, **kwargs):
     '''
     removes the top stack item
     '''
     stack.pop()
 
-def op_dup(opcode=None, stack=None, script=None, **kwargs):
+def op_dup(stack=None, **kwargs):
     '''
     duplicates the top stack item
     '''
     stack.append(stack[-1])
 
-def op_nip(opcode=None, stack=None, script=None, **kwargs):
+def op_nip(stack=None, **kwargs):
     '''
     removes the second-to-top stack item
 
@@ -1008,7 +1016,7 @@ def op_nip(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.pop(-2)
 
-def op_over(opcode=None, stack=None, script=None, **kwargs):
+def op_over(stack=None, **kwargs):
     '''
     copies the second-to-top stack item to the top
 
@@ -1019,7 +1027,7 @@ def op_over(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(stack[-2])
 
-def op_pick(opcode=None, stack=None, script=None, **kwargs):
+def op_pick(stack=None, **kwargs):
     '''
     the item n back in the stack is copied to the top
 
@@ -1030,7 +1038,7 @@ def op_pick(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(stack[-1 - stack.pop()])
 
-def op_roll(opcode=None, stack=None, script=None, **kwargs):
+def op_roll(stack=None, **kwargs):
     '''
     the item n back in the stack is moved to the top
 
@@ -1041,7 +1049,7 @@ def op_roll(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(stack.pop(-1 - stack.pop()))
 
-def op_rot(opcode=None, stack=None, script=None, **kwargs):
+def op_rot(stack=None, **kwargs):
     '''
     the top 3 items on the stack are rotated to the left
 
@@ -1052,7 +1060,7 @@ def op_rot(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(stack.pop(-3))
 
-def op_swap(opcode=None, stack=None, script=None, **kwargs):
+def op_swap(stack=None, **kwargs):
     '''
     the top two items on the stack are swapped
 
@@ -1063,7 +1071,7 @@ def op_swap(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(stack.pop(-2))
 
-def op_tuck(opcode=None, stack=None, script=None, **kwargs):
+def op_tuck(stack=None, **kwargs):
     '''
     the item at the top of the stack is copied and inserted before the
     second-to-top item
@@ -1075,7 +1083,7 @@ def op_tuck(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.insert(-2, stack[-1])
 
-def op_cat(opcode=None, stack=None, script=None, **kwargs):
+def op_cat(stack=None, **kwargs):
     '''
     concatenates two strings (disabled in bitcoin-core)
 
@@ -1087,7 +1095,7 @@ def op_cat(opcode=None, stack=None, script=None, **kwargs):
     suffix = stack.pop()
     stack[-1] += suffix
 
-def op_substr(opcode=None, stack=None, script=None, **kwargs):
+def op_substr(stack=None, **kwargs):
     '''
     returns a section of a string (disabled in bitcoin-core)
 
@@ -1101,7 +1109,7 @@ def op_substr(opcode=None, stack=None, script=None, **kwargs):
     stack[-1] = stack[-1][beginning:beginning + length]
     return stack[-1]  # for conventional caller
 
-def op_left(opcode=None, stack=None, script=None, **kwargs):
+def op_left(stack=None, **kwargs):
     '''
     keeps only characters left of the specified point in a string
     disabled in bitcoin-core
@@ -1115,7 +1123,7 @@ def op_left(opcode=None, stack=None, script=None, **kwargs):
     assert_true(index >= 0)
     stack[-1] = stack[-1][:index]
 
-def op_right(opcode=None, stack=None, script=None, **kwargs):
+def op_right(stack=None, **kwargs):
     '''
     keeps only characters right of the specified point in a string
     disabled in bitcoin-core
@@ -1129,7 +1137,7 @@ def op_right(opcode=None, stack=None, script=None, **kwargs):
     assert_true(index >= 0)
     stack[-1] = stack[-1][index:]
 
-def op_size(opcode=None, stack=None, script=None, **kwargs):
+def op_size(stack=None, **kwargs):
     r'''
     pushes the string length of the top element of the stack
     (without popping it)
@@ -1145,35 +1153,35 @@ def op_size(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(len(stack[-1])))
 
-def op_invert(opcode=None, stack=None, script=None, **kwargs):
+def op_invert(stack=None, **kwargs):
     '''
     flips all of the bits in the input (disabled in bitcoin-core)
     '''
     top = number(stack.pop())
     stack.append(bytevector(~top))
 
-def op_and(opcode=None, stack=None, script=None, **kwargs):
+def op_and(stack=None, **kwargs):
     '''
     boolean AND between each bit in the inputs (disabled in bitcoin-core)
     '''
     operands = (number(stack.pop()), number(stack.pop()))
     stack.append(bytevector(operands[0] & operands[1]))
 
-def op_or(opcode=None, stack=None, script=None, **kwargs):
+def op_or(stack=None, **kwargs):
     '''
     boolean OR between each bit in the inputs (disabled in bitcoin-core)
     '''
     operands = (number(stack.pop()), number(stack.pop()))
     stack.append(bytevector(operands[0] | operands[1]))
 
-def op_xor(opcode=None, stack=None, script=None, **kwargs):
+def op_xor(stack=None, **kwargs):
     '''
     boolean XOR between each bit in the inputs (disabled in bitcoin-core)
     '''
     operands = (number(stack.pop()), number(stack.pop()))
     stack.append(bytevector(operands[0] ^ operands[1]))
 
-def op_equal(opcode=None, stack=None, script=None, **kwargs):
+def op_equal(stack=None, **kwargs):
     r'''
     returns 1 if the inputs are exactly equal, 0 otherwise
 
@@ -1185,7 +1193,7 @@ def op_equal(opcode=None, stack=None, script=None, **kwargs):
     operands = (number(stack.pop()), number(stack.pop()))
     stack.append(bytevector(operands[0] == operands[1]))
 
-def op_equalverify(opcode=None, stack=None, script=None, **kwargs):
+def op_equalverify(stack=None, **kwargs):
     '''
     same as op_equal, but runs op_verify afterward
     '''
@@ -1199,21 +1207,21 @@ def op_equalverify(opcode=None, stack=None, script=None, **kwargs):
 # than 4 bytes, the script must abort and fail. if any opcode marked
 # as disabled is present in a script - it must also abort and fail.
 
-def op_1add(opcode=None, stack=None, script=None, **kwargs):
+def op_1add(stack=None, **kwargs):
     '''
     1 is added to the input
     '''
     stack.append(b'\1')
     op_add(stack=stack)
 
-def op_1sub(opcode=None, stack=None, script=None, **kwargs):
+def op_1sub(stack=None, **kwargs):
     '''
     1 is subtracted from the input
     '''
     stack.append(b'\x81')
     op_add(stack=stack)
 
-def op_2mul(opcode=None, stack=None, script=None, **kwargs):
+def op_2mul(stack=None, **kwargs):
     r'''
     the input is multiplied by 2 (disabled in bitcoin-core)
 
@@ -1224,7 +1232,7 @@ def op_2mul(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) * 2))
 
-def op_2div(opcode=None, stack=None, script=None, **kwargs):
+def op_2div(stack=None, **kwargs):
     r'''
     the input is divided by 2 (disabled in bitcoin-core)
 
@@ -1235,7 +1243,7 @@ def op_2div(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) // 2))
 
-def op_negate(opcode=None, stack=None, script=None, **kwargs):
+def op_negate(stack=None, **kwargs):
     '''
     the sign of the input is flipped
 
@@ -1246,59 +1254,59 @@ def op_negate(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(-number(stack.pop())))
 
-def op_abs(opcode=None, stack=None, script=None, **kwargs):
+def op_abs(stack=None, **kwargs):
     '''
     the input is made positive
     '''
     stack.append(bytevector(abs(number(stack.pop))))
 
-def op_not(opcode=None, stack=None, script=None, **kwargs):
+def op_not(stack=None, **kwargs):
     '''
     if the input is 0 or 1, it is flipped. otherwise the output will be 0.
     '''
     state = number(stack.pop())
     stack.append(bytevector(not state) if state in [0, 1] else b'')
 
-def op_0notequal(opcode=None, stack=None, script=None, **kwargs):
+def op_0notequal(stack=None, **kwargs):
     '''
     returns 0 if the input is 0. 1 otherwise.
     '''
     argument = number(stack.pop())
     stack.append(bytevector(bool(argument)))
 
-def op_add(opcode=None, stack=None, script=None, **kwargs):
+def op_add(stack=None, **kwargs):
     '''
     add top two numbers on stack
     '''
     stack.append(bytevector(number(stack.pop()) + number(stack.pop())))
 
-def op_sub(opcode=None, stack=None, script=None, **kwargs):
+def op_sub(stack=None, **kwargs):
     '''
     for top two stack items [a, b], a - b
     '''
     stack.append(bytevector(-number(stack.pop()) + number(stack.pop())))
 
-def op_mul(opcode=None, stack=None, script=None, **kwargs):
+def op_mul(stack=None, **kwargs):
     '''
     product of top 2 stack items (disabled in bitcoin-core)
     '''
     stack.append(bytevector(number(stack.pop()) * number(stack.pop())))
 
-def op_div(opcode=None, stack=None, script=None, **kwargs):
+def op_div(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b] return a // b (disabled in bitcoin-core)
     '''
     divisor = number(stack.pop())
     stack.append(bytevector(number(stack.pop()) // divisor))
 
-def op_mod(opcode=None, stack=None, script=None, **kwargs):
+def op_mod(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b] return a % b (disabled in bitcoin-core)
     '''
     divisor = number(stack.pop())
     stack.append(bytevector(number(stack.pop()) % divisor))
 
-def op_lshift(opcode=None, stack=None, script=None, **kwargs):
+def op_lshift(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b] return a << b, preserving sign
     (disabled in bitcoin-core)
@@ -1306,7 +1314,7 @@ def op_lshift(opcode=None, stack=None, script=None, **kwargs):
     amount = number(stack.pop())
     stack.append(bytevector(number(stack.pop()) << amount))
 
-def op_rshift(opcode=None, stack=None, script=None, **kwargs):
+def op_rshift(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b] return a >> b preserving sign
     (disabled in bitcoin-core)
@@ -1314,38 +1322,38 @@ def op_rshift(opcode=None, stack=None, script=None, **kwargs):
     amount = number(stack.pop())
     stack.append(bytevector(number(stack.pop()) >> amount))
 
-def op_booland(opcode=None, stack=None, script=None, **kwargs):
+def op_booland(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: if both a and b are not 0, return 1, else 0
     '''
     stack.append(bytevector(number(stack.pop()) and number(stack.pop())))
 
-def op_boolor(opcode=None, stack=None, script=None, **kwargs):
+def op_boolor(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: if a or b is not 0, return 1, else 0
     '''
     stack.append(bytevector(number(stack.pop()) or number(stack.pop())))
 
-def op_numequal(opcode=None, stack=None, script=None, **kwargs):
+def op_numequal(stack=None, **kwargs):
     '''
     returns 1 if numbers are equal, else 0
     '''
     stack.append(bytevector(number(stack.pop()) == number(stack.pop())))
 
-def op_numequalverify(opcode=None, stack=None, script=None, **kwargs):
+def op_numequalverify(stack=None, **kwargs):
     '''
     same as op_numequal but runs op_verify afterward
     '''
     op_numequal(stack=stack)
     op_verify(stack=stack)
 
-def op_numnotequal(opcode=None, stack=None, script=None, **kwargs):
+def op_numnotequal(stack=None, **kwargs):
     '''
     return 1 if numbers are not equal, else 0
     '''
     stack.append(bytevector(number(stack.pop()) != number(stack.pop())))
 
-def op_lessthan(opcode=None, stack=None, script=None, **kwargs):
+def op_lessthan(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return 1 if a < b, else 0
 
@@ -1353,7 +1361,7 @@ def op_lessthan(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) > number(stack.pop())))
 
-def op_greaterthen(opcode=None, stack=None, script=None, **kwargs):
+def op_greaterthen(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return 1 if a > b, else 0
 
@@ -1361,7 +1369,7 @@ def op_greaterthen(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) < number(stack.pop())))
 
-def op_lessthanorequal(opcode=None, stack=None, script=None, **kwargs):
+def op_lessthanorequal(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return 1 if a <= b, else 0
 
@@ -1369,7 +1377,7 @@ def op_lessthanorequal(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) >= number(stack.pop())))
 
-def op_greaterthanorequal(opcode=None, stack=None, script=None, **kwargs):
+def op_greaterthanorequal(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return 1 if a >= b, else 0
 
@@ -1377,19 +1385,19 @@ def op_greaterthanorequal(opcode=None, stack=None, script=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) <= number(stack.pop())))
 
-def op_min(opcode=None, stack=None, script=None, **kwargs):
+def op_min(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return the smaller
     '''
     stack.append(bytevector(min(number(stack.pop()), number(stack.pop()))))
 
-def op_max(opcode=None, stack=None, script=None, **kwargs):
+def op_max(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return the greater
     '''
     stack.append(bytevector(max(number(stack.pop()), number(stack.pop()))))
 
-def op_within(opcode=None, stack=None, script=None, **kwargs):
+def op_within(stack=None, **kwargs):
     r'''
     for top 3 stack items [x, min, max]: return 1 if x is within the
     specified range (left-inclusive), else 0
@@ -1409,7 +1417,7 @@ def op_within(opcode=None, stack=None, script=None, **kwargs):
     logging.debug('checking if %d in range %s', x, range_x)
     stack.append(bytevector(range_x[0] <= x < range_x[1]))
 
-def op_ripemd160(opcode=None, stack=None, script=None, **kwargs):
+def op_ripemd160(stack=None, **kwargs):
     '''
     RIPEMD160 hash of data at top of stack
     '''
@@ -1418,7 +1426,7 @@ def op_ripemd160(opcode=None, stack=None, script=None, **kwargs):
     stack.append(ripemd160.update(data).digest())
     return stack[-1]  # for conventional caller
 
-def op_sha1(opcode=None, stack=None, script=None, **kwargs):
+def op_sha1(stack=None, **kwargs):
     '''
     sha1 hash digest
     '''
@@ -1426,7 +1434,7 @@ def op_sha1(opcode=None, stack=None, script=None, **kwargs):
     stack.append(hashlib.sha1(data).digest())
     return stack[-1]  # for conventional caller
 
-def op_sha256(opcode=None, stack=None, script=None, **kwargs):
+def op_sha256(stack=None, **kwargs):
     '''
     sha256 single hash digest
     '''
@@ -1434,7 +1442,7 @@ def op_sha256(opcode=None, stack=None, script=None, **kwargs):
     stack.append(hashlib.sha256(data).digest())
     return stack[-1]  # for conventional caller
 
-def op_hash160(opcode=None, stack=None, script=None, **kwargs):
+def op_hash160(stack=None, **kwargs):
     '''
     input is hashed twice: first with SHA-256 and then with RIPEMD-160
     '''
@@ -1444,7 +1452,7 @@ def op_hash160(opcode=None, stack=None, script=None, **kwargs):
     stack.append(ripemd160.digest())
     return stack[-1]  # for conventional caller
 
-def op_hash256(opcode=None, stack=None, script=None, **kwargs):
+def op_hash256(stack=None, **kwargs):
     '''
     sha256d hash, which is the hash of a hash
     '''
@@ -1452,14 +1460,14 @@ def op_hash256(opcode=None, stack=None, script=None, **kwargs):
     stack.append(hashlib.sha256(hashlib.sha256(data).digest()).digest())
     return stack[-1]  # for conventional caller
 
-def op_codeseparator(opcode=None, stack=None, script=None, **kwargs):
+def op_codeseparator(stack=None, **kwargs):
     '''
     signature checking words only match signatures to the data after
     the most recently-executed OP_CODESEPARATOR
     '''
-    kwargs['mark'].append(len(kwargs['reference']) - len(script) - 1)
+    kwargs['mark'].append(len(kwargs['reference']) - len(kwargs['script']) - 1)
 
-def op_checksig(opcode=None, stack=None, script=None, **kwargs):
+def op_checksig(stack=None, **kwargs):
     '''
     run OP_CHECKSIG in context of `run` subroutine
 
@@ -1506,14 +1514,14 @@ def op_checksig(opcode=None, stack=None, script=None, **kwargs):
     stack.append(key.verify(hashed, bytes(signature)))
     return stack[-1]  # for conventional caller
 
-def op_checksigverify(opcode=None, stack=None, script=None, **kwargs):
+def op_checksigverify(stack=None, **kwargs):
     '''
     OP_CHECKSIG followed by OP_VERIFY
     '''
-    op_checksig(stack=stack, script=script, kwargs=kwargs)
+    op_checksig(stack=stack, **kwargs)
     op_verify(stack=stack)
 
-def op_checkmultisig(opcode=None, stack=None, script=None, **kwargs):
+def op_checkmultisig(stack=None, **kwargs):
     '''
     compares the first signature against each public key until it finds
     an ECDSA match. Starting with the subsequent public key, it compares
@@ -1530,14 +1538,14 @@ def op_checkmultisig(opcode=None, stack=None, script=None, **kwargs):
     '''
     raise NotImplementedError('op_checkmultisig')
 
-def op_checkmultisigverify(opcode=None, stack=None, script=None, **kwargs):
+def op_checkmultisigverify(stack=None, **kwargs):
     '''
     OP_CHECKMULTISIG followed by OP_VERIFY
     '''
-    op_checkmultisig(stack=stack, script=script, kwargs=kwargs)
+    op_checkmultisig(stack=stack, **kwargs)
     op_verify(stack=stack)
 
-def op_checklocktimeverify(opcode=None, stack=None, script=None, **kwargs):
+def op_checklocktimeverify(stack=None, **kwargs):
     '''
     marks transaction as invalid if the top stack item is greater than
     the transaction's nLockTime field, otherwise script evaluation
@@ -1550,7 +1558,7 @@ def op_checklocktimeverify(opcode=None, stack=None, script=None, **kwargs):
     '''
     raise NotImplementedError('op_checklocktimeverify')
 
-def op_checksequenceverify(opcode=None, stack=None, script=None, **kwargs):
+def op_checksequenceverify(stack=None, **kwargs):
     '''
     marks transaction as invalid if the relative lock time of the input
     (enforced by BIP 0068 with nSequence) is not equal to or longer

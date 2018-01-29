@@ -418,75 +418,75 @@ SCRIPT_OPS += (
     ),
     (0xa6, [
         'RIPEMD160',
-        'ripemd160(**globals())',
-        'pass']
+        'op_ripemd160',
+        'op_nop']
     ),
     (0xa7, [
         'SHA1',
-        'sha1(**globals())',
-        'pass']
+        'op_sha1',
+        'op_nop']
     ),
     (0xa8, [
         'SHA256',
-        'sha256(**globals())',
-        'pass']
+        'op_sha256',
+        'op_nop']
     ),
     (0xa9, [
         'HASH160',
-        'hash160(**globals())',
-        'pass']
+        'op_hash160',
+        'op_nop']
     ),
     (0xaa, [
         'HASH256',
-        'hash256(**globals())',
-        'pass']
+        'op_hash256',
+        'op_nop']
     ),
     (0xab, [
         'CODESEPARATOR',
-        'mark.append(len(reference) - len(script) - 1)',
-        'mark.append(len(reference) - len(script) - 1)']
+        'op_codeseparator',
+        'op_codeseparator']
     ),
     (0xac, [
         'CHECKSIG',
-        'checksig(**globals())',
-        'pass']
+        'op_checksig',
+        'op_nop']
     ),
     (0xad, [
         'CHECKSIGVERIFY',
-        'checksig(**globals()); verify(**globals())',
-        'pass']
+        'op_checksigverify',
+        'op_nop']
     ),
     (0xae, [
         'CHECKMULTISIG',
-        'checkmultisig(**globals())',
-        'pass']
+        'op_checkmultisig',
+        'op_nop']
     ),
     (0xaf, [
         'CHECKMULTISIGVERIFY',
-        'checkmultisig(**globals()); verify(**globals())',
-        'pass']
+        'checkmultisigverify',
+        'op_nop']
     ),
     (0xb0, [
         'NOP1',
-        'pass',
-        'pass']
+        'op_nop',
+        'op_nop']
     ),
     (0xb1, [
         'CHECKLOCKTIMEVERIFY',
-        'checklocktimeverify(**globals())',
-        'pass']
+        'op_checklocktimeverify',
+        'op_nop']
     ),
     (0xb2, [
         'CHECKSEQUENCEVERIFY',
-        'checksequenceverify(**globals())',
-        'pass']
+        'op_checksequenceverify',
+        'op_nop']
     ),
 )
 SCRIPT_OPS += tuple(  # 0xb3 - 0xb9 are NOP_4 through NOP_10
     (opcode, [
         'NOP%d' % (opcode - 0xaf),
-        'pass',
-        'pass'])
+        'op_nop',
+        'op_nop'])
     for opcode in range(0xb3, 0xba)
 )
 
@@ -676,9 +676,10 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     >>> number(stack.pop())
     6
     '''
-    stack = stack if stack is not None else []  # continues using existing stack
+    stack = [] if stack is None else stack  # continues using existing stack
     logging.debug('stack at start of run: %s', stack)
-    kwargs = {}
+    kwargs = {'scriptbinary': scriptbinary, 'txnew': txnew,
+              'txindex': txindex, 'parsed': parsed}
     kwargs['altstack'] = []
     kwargs['mark'] = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
@@ -752,7 +753,7 @@ def addr_to_hash(address, check_validity=True):
     logging.debug('binary: %r', binary)
     intermediate, checksum = binary[:-4], binary[-4:]
     if check_validity:
-        check = hash256(stack=[intermediate])[:4]
+        check = op_hash256(stack=[intermediate])[:4]
         if check != checksum:
             logging.error('%r != %r', check, checksum)
             raise ValueError('Invalid address %s' % address)
@@ -769,7 +770,7 @@ def hash_to_addr(hash160, padding=b'\0'):
     '3BTChqkFai51wFwrHSVdvSW9cPXifrJ7jC'
     '''
     intermediate = padding + hash160
-    checksum = hash256(stack=[intermediate])[:4]
+    checksum = op_hash256(stack=[intermediate])[:4]
     logging.debug('hash_to_addr adding checksum %r', checksum)
     return base58encode(intermediate + checksum)
 
@@ -786,95 +787,10 @@ def pubkey_to_hash(pubkey):
     >>> hash_to_addr(hashed)
     '1Q7f2rL2irjpvsKVys5W2cmKJYss82rNCy'
     '''
-    return hash160([pubkey])
+    return op_hash160(stack=[pubkey])
 
 # the following are the actual script operations, called from `run` routine.
 # they all have the same parameter list
-
-def op_verify(opcode=None, stack=None, script=None, **kwargs):
-    '''
-    raise Exception if top of stack isn't a Boolean "true"
-    '''
-    if not stack.pop():
-        raise TransactionInvalidError('VERIFY failed')
-
-def hash256(stack=None, hashlib=hashlib, **ignored):
-    '''
-    sha256d hash, which is the hash of a hash
-    '''
-    data = stack.pop()
-    stack.append(hashlib.sha256(hashlib.sha256(data).digest()).digest())
-    return stack[-1]  # for conventional caller
-
-def sha256(stack=None, hashlib=hashlib, **ignored):
-    '''
-    sha256 single hash digest
-    '''
-    data = stack.pop()
-    stack.append(hashlib.sha256(data).digest())
-    return stack[-1]  # for conventional caller
-
-def ripemd160(stack=None, hashlib=hashlib, **ignored):
-    '''
-    RIPEMD160 hash of data at top of stack
-    '''
-    data = stack.pop()
-    ripemd160 = hashlib.new('ripemd160')
-    stack.append(ripemd160.update(data).digest())
-    return stack[-1]  # for conventional caller
-
-def hash160(stack=None, hashlib=hashlib, **ignored):
-    '''
-    input is hashed twice: first with SHA-256 and then with RIPEMD-160
-    '''
-    data = stack.pop()
-    ripemd160 = hashlib.new('ripemd160')
-    ripemd160.update(hashlib.sha256(data).digest())
-    stack.append(ripemd160.digest())
-    return stack[-1]  # for conventional caller
-
-def checksig(stack=None, reference=None, mark=None, parsed=None,
-             txnew=None, txindex=None, **ignored):
-    '''
-    run OP_CHECKSIG in context of `run` subroutine
-
-    see https://bitcoin.stackexchange.com/a/32308/3758 and
-    http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html
-    '''
-    logging.debug('checksig stack: %s, reference: %s, mark: %s',
-                  stack, reference, mark)
-    pubkey = stack.pop()
-    signature = list(stack.pop())
-    subscript = reference[mark[-1]:]
-    checker = list(parsed[mark[-1]:])  # for checking for OP_CODESEPARATORs
-    # remove OP_CODESEPARATORs in subscript
-    # only safe way to do this is to work backwards using positive indices
-    for offset in range(len(checker) - 1, 0, -1):
-        if checker[offset] == 0xab:  # OP_CODESEPARATOR
-            checker.pop(offset)
-            subscript.pop(offset)
-    hashtype = signature.pop()
-    hashtype_code = struct.pack('<L', hashtype)
-    txcopy = copy.deepcopy(txnew)
-    for input in txcopy[2]:
-        input[2] = b'\0'
-        input[3] = b''
-    try:
-        logging.debug('replacing input script %d with subscript', txindex)
-        txcopy[2][txindex][2] = varint_length(subscript)
-        txcopy[2][txindex][3] = bytes(subscript)
-    except TypeError:
-        logging.error('txcopy: %r, txcopy[2]: %r, txcopy[2][0]: %r',
-                      txcopy, txcopy[2], txcopy[2][0])
-        raise
-    serialized = tx_serialize(txcopy) + hashtype_code
-    logging.debug('serialized with hashtype_code: %s', serialized)
-    hashed = hash256(stack=[serialized])
-    logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
-    key = CECKey()
-    key.set_pubkey(pubkey)
-    stack.append(key.verify(hashed, bytes(signature)))
-    return stack[-1]  # for conventional caller
 
 def op_nop(opcode=None, stack=None, script=None, **kwargs):
     '''
@@ -978,6 +894,13 @@ def op_endif(opcode=None, stack=None, script=None, **kwargs):
     end an IF or NOTIF block
     '''
     kwargs['ifstack'].pop()
+
+def op_verify(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    raise Exception if top of stack isn't a Boolean "true"
+    '''
+    if not stack.pop():
+        raise TransactionInvalidError('VERIFY failed')
 
 def op_return(opcode=None, stack=None, script=None, **kwargs):
     '''
@@ -1266,8 +1189,8 @@ def op_equalverify(opcode=None, stack=None, script=None, **kwargs):
     '''
     same as op_equal, but runs op_verify afterward
     '''
-    op_equal(stack==stack)
-    op_verify(stack==stack)
+    op_equal(stack=stack)
+    op_verify(stack=stack)
 
 # arithmetic inputs are limited to signed 32-bit integers,
 # but may overflow their output.
@@ -1486,6 +1409,156 @@ def op_within(opcode=None, stack=None, script=None, **kwargs):
     logging.debug('checking if %d in range %s', x, range_x)
     stack.append(bytevector(range_x[0] <= x < range_x[1]))
 
+def op_ripemd160(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    RIPEMD160 hash of data at top of stack
+    '''
+    data = stack.pop()
+    ripemd160 = hashlib.new('ripemd160')
+    stack.append(ripemd160.update(data).digest())
+    return stack[-1]  # for conventional caller
+
+def op_sha1(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    sha1 hash digest
+    '''
+    data = stack.pop()
+    stack.append(hashlib.sha1(data).digest())
+    return stack[-1]  # for conventional caller
+
+def op_sha256(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    sha256 single hash digest
+    '''
+    data = stack.pop()
+    stack.append(hashlib.sha256(data).digest())
+    return stack[-1]  # for conventional caller
+
+def op_hash160(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    input is hashed twice: first with SHA-256 and then with RIPEMD-160
+    '''
+    data = stack.pop()
+    ripemd160 = hashlib.new('ripemd160')
+    ripemd160.update(hashlib.sha256(data).digest())
+    stack.append(ripemd160.digest())
+    return stack[-1]  # for conventional caller
+
+def op_hash256(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    sha256d hash, which is the hash of a hash
+    '''
+    data = stack.pop()
+    stack.append(hashlib.sha256(hashlib.sha256(data).digest()).digest())
+    return stack[-1]  # for conventional caller
+
+def op_codeseparator(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    signature checking words only match signatures to the data after
+    the most recently-executed OP_CODESEPARATOR
+    '''
+    kwargs['mark'].append(len(kwargs['reference']) - len(script) - 1)
+
+def op_checksig(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    run OP_CHECKSIG in context of `run` subroutine
+
+    see https://bitcoin.stackexchange.com/a/32308/3758 and
+    http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html
+    '''
+    reference = kwargs['reference']
+    txnew = kwargs['txnew']
+    txindex = kwargs['txindex']
+    mark = kwargs['mark']
+    parsed = kwargs['parsed']
+    logging.debug('op_checksig stack: %s, reference: %s, mark: %s',
+                  stack, reference, mark)
+    pubkey = stack.pop()
+    signature = list(stack.pop())
+    subscript = reference[mark[-1]:]
+    checker = list(parsed[mark[-1]:])  # for checking for OP_CODESEPARATORs
+    # remove OP_CODESEPARATORs in subscript
+    # only safe way to do this is to work backwards using positive indices
+    for offset in range(len(checker) - 1, 0, -1):
+        if checker[offset] == 0xab:  # OP_CODESEPARATOR
+            checker.pop(offset)
+            subscript.pop(offset)
+    hashtype = signature.pop()
+    hashtype_code = struct.pack('<L', hashtype)
+    txcopy = copy.deepcopy(txnew)
+    for input in txcopy[2]:
+        input[2] = b'\0'
+        input[3] = b''
+    try:
+        logging.debug('replacing input script %d with subscript', txindex)
+        txcopy[2][txindex][2] = varint_length(subscript)
+        txcopy[2][txindex][3] = bytes(subscript)
+    except TypeError:
+        logging.error('txcopy: %r, txcopy[2]: %r, txcopy[2][0]: %r',
+                      txcopy, txcopy[2], txcopy[2][0])
+        raise
+    serialized = tx_serialize(txcopy) + hashtype_code
+    logging.debug('serialized with hashtype_code: %s', serialized)
+    hashed = op_hash256(stack=[serialized])
+    logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
+    key = CECKey()
+    key.set_pubkey(pubkey)
+    stack.append(key.verify(hashed, bytes(signature)))
+    return stack[-1]  # for conventional caller
+
+def op_checksigverify(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    OP_CHECKSIG followed by OP_VERIFY
+    '''
+    op_checksig(stack=stack, script=script, kwargs=kwargs)
+    op_verify(stack=stack)
+
+def op_checkmultisig(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    compares the first signature against each public key until it finds
+    an ECDSA match. Starting with the subsequent public key, it compares
+    the second signature against each remaining public key until it finds
+    an ECDSA match. The process is repeated until all signatures have
+    been checked or not enough public keys remain to produce a successful
+    result. All signatures need to match a public key. Because public
+    keys are not checked again if they fail any signature comparison,
+    signatures must be placed in the scriptSig using the same order
+    as their corresponding public keys were placed in the scriptPubKey
+    or redeemScript. If all signatures are valid, 1 is returned,
+    0 otherwise. Due to a bug, one extra unused value is removed
+    from the stack.
+    '''
+    raise NotImplementedError('op_checkmultisig')
+
+def op_checkmultisigverify(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    OP_CHECKMULTISIG followed by OP_VERIFY
+    '''
+    op_checkmultisig(stack=stack, script=script, kwargs=kwargs)
+    op_verify(stack=stack)
+
+def op_checklocktimeverify(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    marks transaction as invalid if the top stack item is greater than
+    the transaction's nLockTime field, otherwise script evaluation
+    continues as though an OP_NOP was executed. Transaction is als
+    o invalid if 1. the stack is empty; or 2. the top stack item is
+    negative; or 3. the top stack item is greater than or equal to
+    500000000 while the transaction's nLockTime field is less than
+    500000000, or vice versa; or 4. the input's nSequence field is
+    equal to 0xffffffff. The precise semantics are described in BIP 0065
+    '''
+    raise NotImplementedError('op_checklocktimeverify')
+
+def op_checksequenceverify(opcode=None, stack=None, script=None, **kwargs):
+    '''
+    marks transaction as invalid if the relative lock time of the input
+    (enforced by BIP 0068 with nSequence) is not equal to or longer
+    than the value of the top stack item. The precise semantics are
+    described in BIP 0112
+    '''
+    raise NotImplementedError('op_checksequenceverify')
+
 # end of script ops
 # now some helper functions for the script ops
 
@@ -1544,6 +1617,8 @@ def tx_serialize(transaction):
     copied[4] = b''.join([b''.join(item) for item in copied[4]])
     return b''.join(copied)
 
+# and now some routines for testing and analyzing blockchains
+
 def test_checksig(current_tx, txin_index, previous_tx):
     '''
     display and run scripts in given transactions to test OP_CHECKSIG
@@ -1557,7 +1632,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     txin_script = txin[3]
     parsed, readable = parse(txin_script)
     logging.debug('running txin script %s', readable)
-    stack = run(txin_script, current_tx, txin_index, parsed, stack)
+    run(txin_script, current_tx, txin_index, parsed, stack)
     logging.debug('stack after running txin script: %s', stack)
     logging.debug('parsing and displaying previous txout script...')
     txout = previous_tx[4]
@@ -1565,7 +1640,7 @@ def test_checksig(current_tx, txin_index, previous_tx):
     parsed, readable = parse(txout_script)
     logging.debug('stack before running txout script: %s', stack)
     logging.debug('running txout script %s', readable)
-    stack = run(txout_script, current_tx, txin_index, parsed, stack)
+    run(txout_script, current_tx, txin_index, parsed, stack)
     result = bool(stack.pop())
     logging.info('transaction result: %s', ['fail', 'pass'][result])
 
@@ -1628,7 +1703,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             stack = []
             txin_script = txin[3]
             parsed, readable = parse(txin_script, display=False)
-            stack = run(txin_script, transaction, txindex, parsed, stack)
+            run(txin_script, transaction, txindex, parsed, stack)
             result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)
             if result is None:
@@ -1644,7 +1719,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 txout_script = tx[4][txout_index][2]
                 parsed, readable = parse(txout_script, display=False)
                 # still using stack from above txin_script
-                stack = run(txout_script, transaction, txindex,
+                run(txout_script, transaction, txindex,
                             parsed, stack)
                 result = bool(stack.pop())
                 logging.info('%d scripts executed successfully', count)
@@ -1694,7 +1769,7 @@ if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     command, args = (sys.argv + [None])[1], sys.argv[2:]
     # some commands expect a list
-    if command in ['script_compile', 'hash160']:
+    if command in ['script_compile', 'op_hash160']:
         print(globals()[command]([bytes(s, 'utf8') for s in args]))
     elif command in globals() and callable(globals()[command]):
         print(globals()[command](*args))

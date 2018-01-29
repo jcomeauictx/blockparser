@@ -240,12 +240,16 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             logging.warning('out of order block %r', blockhash)
             if previous_blockhash not in order:
                 logging.warning('orphan block: %r', blockhash)
-                orphans[blockhash] = previous_hash
+                orphans[blockhash] = previous_blockhash
                 logging.info('orphans: %s', orphans)
+                continue
             else:
                 logging.warning('reordering blockchain')
                 logging.warning('current [false] height: %d', len(order) - 2)
-                order[order.index(previous_hash) + 1:] = []
+                order[order.index(previous_blockhash) + 1:] = []
+        if previous_blockhash != order[-1]:
+            raise ValueError('%s not at end of %s' % (previous_blockhash,
+                             order[-5:]))
         order.append(blockhash)
         logging.info('current [real] height: %d out of %d',
                      len(order) - 2, height)

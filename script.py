@@ -1712,11 +1712,12 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             txin_script = txin[3]
             parsed, readable = parse(txin_script, display=False)
             run(txin_script, transaction, txindex, parsed, stack)
+            logging.debug('checking result on stack: %s', stack)
             result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)
             if result is None:
                 raise(TransactionInvalidError('input script failed'))
-            else:
+            elif not result:
                 logging.info('input script %s was programmed to fail', readable)
             count += 1
             previous_hash = txin[0]
@@ -1734,12 +1735,15 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.info('%d of those were spends', spendcount)
                 if result is None:
                     raise(TransactionInvalidError('output script failed'))
-                else:
+                elif not result:
                     logging.info('output script %s was programmed to fail',
                                  readable)
                 count += 1
                 spendcount += 1
                 break  # out of inner loop
+    logging.info('final tally:')
+    logging.info('%d scripts executed successfully', count)
+    logging.info('%d of those were spends', spendcount)
 
 def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
     '''
@@ -1777,7 +1781,7 @@ if __name__ == '__main__':
     # default operation is to test OP_CHECKSIG
     command, args = (sys.argv + [None])[1], sys.argv[2:]
     # some commands expect a list
-    if command in ['script_compile'] or command.startswith('op_'):
+    if command and (command in ['script_compile'] or command.startswith('op_')):
         print(globals()[command]([bytes(s, 'utf8') for s in args]))
     elif command in globals() and callable(globals()[command]):
         print(globals()[command](*args))

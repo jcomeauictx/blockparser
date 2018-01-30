@@ -269,15 +269,17 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             logging.debug('previous block should be: %s', show_hash(previous))
             logging.info('lastnode: %s', lastnode)
             index = -1
-            completed = [False] * len(chains)
-            while not all(completed):
+            searched = [False] * len(chains)
+            found = False
+            while not found and not all(searched):
                 logging.debug('searching at index %d for previous block', index)
                 for blockchain in range(len(chains)):
-                    if completed[blockchain]:
-                        logging.debug('skipping completed chain %d', blockchain)
+                    if searched[blockchain]:
+                        logging.debug('skipping searched chain %d', blockchain)
                         continue
                     try:
                         if previous == chains[blockchain][index].blockhash:
+                            found = True
                             lastnode = chains[blockchain][index]
                             if index == -1:
                                 chain = blockchain
@@ -286,9 +288,9 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                                 logging.warning('new branch chain %d', chain)
                             break
                     except IndexError as end_reached:
-                        completed[blockchain] = True
+                        searched[blockchain] = True
                 index -= 1
-            if all(completed):
+            if all(searched):
                 logging.info('chains: %s', chains)
                 raise ValueError('previous block %r not found' %
                                  show_hash(previous))

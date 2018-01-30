@@ -44,6 +44,8 @@ UNPACKER = {
     8: '<Q',
 }
 
+NULLBLOCK = '\0' * 32  # pointed to by genesis block
+
 def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     generator that fetches and returns raw blocks out of blockfiles
@@ -141,7 +143,7 @@ def parse_blockheader(blockheader):
     return contents of block header
     '''
     version = blockheader[:4]
-    previous_blockhash = blockheader[4:36]
+    previous = blockheader[4:36]
     merkle_root = blockheader[36:68]
     unix_time = blockheader[68:72]
     nbits = blockheader[72:76]
@@ -150,13 +152,13 @@ def parse_blockheader(blockheader):
     if len(nonce) != 4:
         raise ValueError('Nonce wrong size: %d bytes' % len(nonce))
     logging.info('block version: %s', show_long(version))
-    logging.info('previous block hash: %s', show_hash(previous_blockhash))
+    logging.info('previous block hash: %s', show_hash(previous))
     logging.info('merkle root: %s', show_hash(merkle_root))
     logging.info('unix time: %s', timestamp(unix_time))
     logging.info('nbits: %r', to_hex(nbits))
     logging.info('nonce: %s', to_hex(nonce))
     logging.info('block hash: %s', show_hash(blockhash))
-    return version, previous_blockhash, merkle_root, nbits, nonce, blockhash
+    return version, previous, merkle_root, nbits, nonce, blockhash
 
 def to_long(bytestring):
     '''
@@ -224,6 +226,23 @@ def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             txhash = get_hash(raw_transaction)
             yield height, txhash, transaction
 
+class Node(object):
+    '''
+    tree node
+    '''
+    def __init__(self, parent=None, blockhash=None):
+        self.parent = parent
+        self.blockhash = blockhash
+    def countback(self):
+        '''
+        return length of the chain that ends with this block
+        '''
+        count = 1
+        parent = self.parent
+        while parent.blockhash != NULLBLOCK:
+            count += 1
+            parent = parent.parent
+
 def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     removes orphan blocks and corrects height
@@ -231,28 +250,41 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     logging.debug('blockfiles: %s', blockfiles)
     blockfiles = blockfiles or DEFAULT
     blocks = nextblock(blockfiles, minblock, maxblock)
-    order = [b'\0' * 32]  # should only be seen in genesis block
-    orphans = {}
+    lastnode = Node(None, NULLBLOCK)
+    chains = [[lastnode]]
+    chain = 0
     for height, header, transactions in blocks:
         parsed = parse_blockheader(header)
-        previous_blockhash, blockhash = parsed[1], parsed[5]
-        if previous_blockhash != order[-1]:
+        previous, blockhash = parsed[1], parsed[5]
+        if previous != lastnode.blockhash:
             logging.warning('out of order block %r', blockhash)
-            if previous_blockhash not in order:
-                logging.warning('orphan block: %r', blockhash)
-                orphans[blockhash] = previous_blockhash
-                logging.info('orphans: %s', orphans)
-                continue
-            else:
-                logging.warning('reordering blockchain')
-                logging.warning('current [false] height: %d', len(order) - 2)
-                order[order.index(previous_blockhash) + 1:] = []
-        if previous_blockhash != order[-1]:
-            raise ValueError('%s not at end of %s' % (previous_blockhash,
-                             order[-5:]))
-        order.append(blockhash)
+            index = -1
+            completed = [False] * len(chains)
+            while not all(completed):
+                logging.debug('searching at index %d for previous block', index)
+                for blockchain in range(len(chains)):
+                    if completed[blockchain]:
+                        logging.debug('skipping completed chain %d', blockchain)
+                        continue
+                    try:
+                        if previous == chains[blockchain][index].blockhash:
+                            lastnode = chains[blockchain][index]
+                            if index == -1:
+                                chain = blockchain
+                            else:
+                                chain = len(chains)
+                                logging.warning('new branch chain %d', chain)
+                            break
+                    except IndexError as end_reached:
+                        completed[blockchain] = True
+                index -= 1
+            if all(completed):
+                raise ValueError('previous block %r not found' % previous)
+        node = Node(lastnode, blockhash)
+        chains[chain].append(node)
+        logging.info('current chain: %d out of %d', chain, len(chains))
         logging.info('current [real] height: %d out of %d',
-                     len(order) - 2, height)
+                     node.countback(), height)
 
 def parse_transaction(data):
     '''

@@ -238,10 +238,10 @@ class Node(object):
         '''
         return length of the chain that ends with this block
         '''
-        count = 1
+        count = 0
         parent = self.parent
         while parent.blockhash != NULLBLOCK:
-            logging.debug('parent.blockhash: %s', show_hash(parent.blockhash))
+            #logging.debug('parent.blockhash: %s', show_hash(parent.blockhash))
             count += 1
             parent = parent.parent
         return count
@@ -295,8 +295,9 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
         node = Node(lastnode, blockhash)
         chains[chain].append(node)
         logging.info('current chain: %d out of %d', chain, len(chains))
-        logging.info('current [real] height: %d out of %d',
-                     node.countback(), height)
+        lastnode = node
+    logging.info('current [real] height: %d out of %d',
+                 node.countback(), height)
 
 def parse_transaction(data):
     '''

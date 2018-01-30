@@ -44,7 +44,7 @@ UNPACKER = {
     8: '<Q',
 }
 
-NULLBLOCK = '\0' * 32  # pointed to by genesis block
+NULLBLOCK = b'\0' * 32  # pointed to by genesis block
 
 def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
@@ -183,6 +183,7 @@ def to_hex(bytestring):
     '''
     for displaying bytes in hexadecimal
     '''
+    logging.debug('to_hex bytestring: %r', bytestring)
     return binascii.b2a_hex(bytestring)
 
 def get_hash(bytestring, repeat=2):

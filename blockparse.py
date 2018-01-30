@@ -233,6 +233,7 @@ class Node(object):
     def __init__(self, parent=None, blockhash=None):
         self.parent = parent
         self.blockhash = blockhash
+
     def countback(self):
         '''
         return length of the chain that ends with this block
@@ -240,8 +241,14 @@ class Node(object):
         count = 1
         parent = self.parent
         while parent.blockhash != NULLBLOCK:
+            logging.debug('parent.blockhash: %s', show_hash(parent.blockhash))
             count += 1
             parent = parent.parent
+        return count
+
+    def __str__(self):
+        return '<Node hash=%s>' % show_hash(self.blockhash)
+    __repr__ = __str__
 
 def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
@@ -252,12 +259,15 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     blocks = nextblock(blockfiles, minblock, maxblock)
     lastnode = Node(None, NULLBLOCK)
     chains = [[lastnode]]
+    logging.debug('chains: %s', chains)
     chain = 0
     for height, header, transactions in blocks:
         parsed = parse_blockheader(header)
         previous, blockhash = parsed[1], parsed[5]
         if previous != lastnode.blockhash:
-            logging.warning('out of order block %r', blockhash)
+            logging.warning('out of order block %r', show_hash(blockhash))
+            logging.debug('previous block should be: %s', show_hash(previous))
+            logging.info('lastnode: %s', lastnode)
             index = -1
             completed = [False] * len(chains)
             while not all(completed):
@@ -279,7 +289,9 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                         completed[blockchain] = True
                 index -= 1
             if all(completed):
-                raise ValueError('previous block %r not found' % previous)
+                logging.info('chains: %s', chains)
+                raise ValueError('previous block %r not found' %
+                                 show_hash(previous))
         node = Node(lastnode, blockhash)
         chains[chain].append(node)
         logging.info('current chain: %d out of %d', chain, len(chains))

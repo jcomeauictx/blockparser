@@ -235,13 +235,20 @@ class Node(object):
         self.parent = parent
         self.blockhash = blockhash
 
-    def countback(self):
-        '''
+    def countback(self, searchblock=NULLBLOCK):
+        r'''
         return length of the chain that ends with this block
+
+        >>> node = Node(None, NULLBLOCK)  # not a real node
+        >>> node = Node(node, b'\0')  # height 0, genesis block
+        >>> node = Node(node, b'\1')  # height 1
+        >>> node = Node(node, b'\2')  # height 2
+        >>> node.countback()
+        2
         '''
         count = 0
         parent = self.parent
-        while parent.blockhash != NULLBLOCK:
+        while parent.blockhash != searchblock:
             #logging.debug('parent.blockhash: %s', show_hash(parent.blockhash))
             count += 1
             parent = parent.parent
@@ -419,8 +426,8 @@ def varint_length(data):
     r'''
     create new VarInt count of raw data
     
-    >>> varint_length('\0' * 512)
-    b'\xfd\x00\x02'
+    >>> repr(varint_length('\0' * 512)).endswith("'\\xfd\\x00\\x02'")
+    True
     '''
     length = len(data)
     if length < 0xfd:

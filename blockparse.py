@@ -286,6 +286,7 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                             else:
                                 chain = len(chains)
                                 logging.warning('new branch chain %d', chain)
+                                chains.append([])
                             break
                     except IndexError as end_reached:
                         searched[blockchain] = True

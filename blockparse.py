@@ -235,16 +235,25 @@ class Node(object):
         self.parent = parent
         self.blockhash = blockhash
 
-    def countback(self, searchblock=NULLBLOCK):
+    def countback(self, searchblock=NULLBLOCK, limit=None):
         r'''
-        return length of the chain that ends with this block
+        return node and height of the chain that ends with this block
 
+        if using a searchblock other than NULLBLOCK, caller is responsible
+        to add 1 to the result to get the actual number of blocks traversed
         >>> node = Node(None, NULLBLOCK)  # not a real node
         >>> node = Node(node, b'\0')  # height 0, genesis block
         >>> node = Node(node, b'\1')  # height 1
         >>> node = Node(node, b'\2')  # height 2
-        >>> node.countback()
+        >>> node.countback()[1]
         2
+        >>> node.countback(b'\0')[1]
+        1
+        >>> try:
+        ...  node.countback(None)
+        ... except AttributeError:
+        ...  print('failed')
+        failed
         '''
         count = 0
         parent = self.parent
@@ -252,7 +261,9 @@ class Node(object):
             #logging.debug('parent.blockhash: %s', show_hash(parent.blockhash))
             count += 1
             parent = parent.parent
-        return count
+            if limit and count == limit:
+                raise AttributeError('limit reached')
+        return parent, count
 
     def __str__(self):
         return '<Node hash=%s>' % show_hash(self.blockhash)
@@ -276,33 +287,25 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             logging.warning('out of order block %r', show_hash(blockhash))
             logging.debug('previous block should be: %s', show_hash(previous))
             logging.info('lastnode: %s', lastnode)
-            index = -1
-            searched = [False] * len(chains)
-            found = False
-            while not found and not all(searched):
-                logging.debug('searching at index %d for previous block', index)
-                for blockchain in range(len(chains)):
-                    if searched[blockchain]:
-                        logging.debug('skipping searched chain %d', blockchain)
-                        continue
-                    try:
-                        if previous == chains[blockchain][index].blockhash:
-                            found = True
-                            lastnode = chains[blockchain][index]
-                            if index == -1:
-                                chain = blockchain
-                            else:
-                                chain = len(chains)
-                                logging.warning('new branch chain %d', chain)
-                                chains.append([])
-                            break
-                    except IndexError as end_reached:
-                        searched[blockchain] = True
-                index -= 1
-            if all(searched):
-                logging.info('chains: %s', chains)
-                raise ValueError('previous block %r not found' %
-                                 show_hash(previous))
+            found, count = None, 0
+            try:
+                logging.debug('assuming previous block in this same chain')
+                found, count = lastnode.countback(previous)
+                logging.debug('found %s %d blocks back', found, count)
+            except AttributeError:
+                logging.debug('searching other chains')
+                for chain in reversed(chains):
+                    found = ([node for node in chain
+                              if node.blockhash == previous] + [None])[0]
+                    if found is not None:
+                        logging.debug('found %s in another chain', previous)
+                        break
+            if found is None:
+                raise ValueError('Previous block %s not found', previous)
+            else:
+                lastnode = found.parent
+                chain = len(chains)
+                chains.append([])
         node = Node(lastnode, blockhash)
         chains[chain].append(node)
         logging.info('current chain: %d out of %d', chain, len(chains))

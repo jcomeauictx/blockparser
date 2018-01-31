@@ -291,27 +291,34 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             try:
                 logging.debug('assuming previous block in this same chain')
                 found, count = lastnode.countback(previous)
-                logging.debug('found %s %d blocks back', found, count)
+                logging.debug('reorder found %s %d blocks back',
+                              found, count + 2)
             except AttributeError:
                 logging.debug('searching other chains')
                 for chain in reversed(chains):
                     found = ([node for node in chain
                               if node.blockhash == previous] + [None])[0]
                     if found is not None:
-                        logging.debug('found %s in another chain', previous)
+                        logging.debug('reorder found %s in another chain',
+                                      previous)
                         break
             if found is None:
                 raise ValueError('Previous block %s not found', previous)
             else:
                 lastnode = found.parent
+                # sanity check on above programming
+                assert_true(previous == lastnode.blockhash)
                 chain = len(chains)
                 chains.append([])
         node = Node(lastnode, blockhash)
         chains[chain].append(node)
         logging.info('current chain: %d out of %d', chain, len(chains))
         lastnode = node
-    logging.info('current [real] height: %d out of %d',
-                 node.countback(), height)
+        logging.info('current [real] height: %d out of %d',
+                     node.countback()[1], height)
+    logging.info('final [real] height: %d out of %d',
+                 chains[chain][-1].countback()[1], height)
+    print(chains)
 
 def parse_transaction(data):
     '''
@@ -441,6 +448,17 @@ def varint_length(data):
         return b'\xfe' + struct.pack('<L', length)
     else:  # will throw struct.error if above quad range
         return b'\xff' + struct.pack('<Q', length)
+
+# make sure assertions work even if optimized
+try:
+    assert 1 == 0  # check if running optimized
+    # the above would have raised an AssertionError if not
+    def assert_true(statement):
+        if not statement:
+            raise AssertionError
+except AssertionError:
+    def assert_true(statement):
+        assert(statement)
 
 if __name__ == '__main__':
     blockparse = parse

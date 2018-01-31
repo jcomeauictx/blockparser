@@ -255,7 +255,7 @@ class Node(object):
         >>> node.countback()[1]
         2
         >>> node.countback(b'\0')
-        (type('Node', (), {'hash': '00', 'timestamp': ''}), 1)
+        ({'Node': {'hash': '00', 'timestamp': ''}}, 1)
         >>> try:
         ...  node.countback(None)
         ... except AttributeError:
@@ -273,7 +273,7 @@ class Node(object):
         return parent, count
 
     def __str__(self):
-        return "type('Node', (), {'hash': '%s', 'timestamp': '%s'})" % (
+        return "{'Node': {'hash': '%s', 'timestamp': '%s'}}" % (
             show_hash(self.blockhash),
             self.blocktime)
     __repr__ = __str__

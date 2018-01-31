@@ -247,8 +247,8 @@ class Node(object):
         >>> node = Node(node, b'\2')  # height 2
         >>> node.countback()[1]
         2
-        >>> node.countback(b'\0')[1]
-        1
+        >>> node.countback(b'\0')
+        (<Node hash=b'00'>, 1)
         >>> try:
         ...  node.countback(None)
         ... except AttributeError:
@@ -305,7 +305,7 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             if found is None:
                 raise ValueError('Previous block %s not found', previous)
             else:
-                lastnode = found.parent
+                lastnode = found
                 # sanity check on above programming
                 assert_true(previous == lastnode.blockhash)
                 chain = len(chains)
@@ -314,8 +314,6 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
         chains[chain].append(node)
         logging.info('current chain: %d out of %d', chain, len(chains))
         lastnode = node
-        logging.info('current [real] height: %d out of %d',
-                     node.countback()[1], height)
     logging.info('final [real] height: %d out of %d',
                  chains[chain][-1].countback()[1], height)
     print(chains)

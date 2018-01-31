@@ -158,7 +158,7 @@ def parse_blockheader(blockheader):
     logging.info('nbits: %r', to_hex(nbits))
     logging.info('nonce: %s', to_hex(nonce))
     logging.info('block hash: %s', show_hash(blockhash))
-    return version, previous, merkle_root, nbits, nonce, blockhash
+    return version, previous, merkle_root, unix_time, nbits, nonce, blockhash
 
 def to_long(bytestring):
     '''
@@ -231,9 +231,10 @@ class Node(object):
     '''
     tree node
     '''
-    def __init__(self, parent=None, blockhash=None):
+    def __init__(self, parent=None, blockhash=None, blocktime=''):
         self.parent = parent
         self.blockhash = blockhash
+        self.blocktime = blocktime
 
     def countback(self, searchblock=NULLBLOCK, limit=None):
         r'''
@@ -266,7 +267,9 @@ class Node(object):
         return parent, count
 
     def __str__(self):
-        return '<Node hash=%s>' % show_hash(self.blockhash)
+        return '<Node hash=%s timestamp=%s>' % (
+            show_hash(self.blockhash),
+            self.blocktime)
     __repr__ = __str__
 
 def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
@@ -282,7 +285,8 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     chain = 0
     for height, header, transactions in blocks:
         parsed = parse_blockheader(header)
-        previous, blockhash = parsed[1], parsed[5]
+        previous, blockhash = parsed[1], parsed[6]
+        blocktime = timestamp(parsed[3])
         if previous != lastnode.blockhash:
             logging.warning('out of order block %r', show_hash(blockhash))
             logging.debug('previous block should be: %s', show_hash(previous))
@@ -310,7 +314,7 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 assert_true(previous == lastnode.blockhash)
                 chain = len(chains)
                 chains.append([])
-        node = Node(lastnode, blockhash)
+        node = Node(lastnode, blockhash, blocktime)
         chains[chain].append(node)
         logging.info('current chain: %d out of %d', chain, len(chains))
         lastnode = node

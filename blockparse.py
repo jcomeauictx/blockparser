@@ -182,9 +182,15 @@ def timestamp(bytestring):
 def to_hex(bytestring):
     '''
     for displaying bytes in hexadecimal
+
+    the str() and .decode() stuff is necessary to get an unadorned string
+    in both Python2 and Python3
+
+    to_hex('\x01\xff')
+    'ff01'
     '''
     logging.debug('to_hex bytestring: %r', bytestring)
-    return binascii.b2a_hex(bytestring)
+    return str(binascii.b2a_hex(bytestring).decode('utf8'))
 
 def get_hash(bytestring, repeat=2):
     '''
@@ -249,7 +255,7 @@ class Node(object):
         >>> node.countback()[1]
         2
         >>> node.countback(b'\0')
-        (<Node hash=b'00'>, 1)
+        (type('Node', (), {'hash': '00', 'timestamp': ''}), 1)
         >>> try:
         ...  node.countback(None)
         ... except AttributeError:
@@ -267,7 +273,7 @@ class Node(object):
         return parent, count
 
     def __str__(self):
-        return '<Node hash=%s timestamp=%s>' % (
+        return "type('Node', (), {'hash': '%s', 'timestamp': '%s'})" % (
             show_hash(self.blockhash),
             self.blocktime)
     __repr__ = __str__

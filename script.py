@@ -1089,8 +1089,8 @@ def op_cat(stack=None, **kwargs):
 
     >>> stack = [b'abc', b'de']
     >>> op_cat(stack=stack)
-    >>> stack
-    [b'abcde']
+    >>> str(stack[0].decode('utf8'))
+    'abcde'
     '''
     suffix = stack.pop()
     stack[-1] += suffix

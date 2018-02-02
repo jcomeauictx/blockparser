@@ -722,7 +722,11 @@ def base58decode(address):
     for digit in address:
         result = (result * 58) + BASE58DIGITS.index(digit)
     logging.debug('result: %s', result)
-    decoded = result.to_bytes((result.bit_length() + 7) // 8, 'big')
+    try:
+        decoded = result.to_bytes((result.bit_length() + 7) // 8, 'big')
+    except AttributeError:  # must be Python2
+        hexed = '%x' % result
+        decoded = ('0' * (len(hexed) % 2) + hexed).decode('hex')
     padding = b'\0' * (len(address) - len(address.lstrip(BASE58DIGITS[0])))
     return padding + decoded
 

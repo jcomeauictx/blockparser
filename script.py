@@ -691,7 +691,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     kwargs['altstack'] = []
     kwargs['mark'] = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
-    kwargs['script'] = script = list(scriptbinary)  # list of `ord`s
+    kwargs['script'] = script = list(map(ord, scriptbinary))
     kwargs['reference'] = list(script)  # make a copy
     kwargs['ifstack'] = []  # internal stack for each script
 
@@ -702,7 +702,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
             kwargs['opcode'] = opcode = script.pop(0)
             operation = opcodes.get(opcode, None)
             if operation is None:
-                logging.error('fatal error in %s, offset %d', txnew, txindex)
+                logging.error('fatal error in %s, offset %s', txnew, txindex)
                 raise NotImplementedError('no such opcode 0x%x' % opcode)
             else:
                 if kwargs['ifstack'] and not kwargs['ifstack'][-1]:

@@ -1600,20 +1600,23 @@ def number(bytestring):
 
     >>> number(b'\x80')
     0
+    >>> number(b'')
+    0
     >>> number(b'\xe8\x83')
     -1000
     >>> number(3)
     3
     '''
     try:
-        msbs = bytestring[-1]
+        msbs = ord(bytestring[-1:])
         sign, msbs = bool(msbs & 0x80), msbs & 0x7f
         bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
         return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
-    except IndexError:
-        return 0
     except TypeError:
-        return bytestring
+        try:
+            return int(bytestring)
+        except ValueError:  # assuming b''
+            return 0
 
 def tx_serialize(transaction):
     '''

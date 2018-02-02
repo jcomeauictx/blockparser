@@ -1250,8 +1250,8 @@ def op_2div(stack=None, **kwargs):
 
     >>> stack = [b'\x03']
     >>> op_2div(stack=stack)
-    >>> stack
-    [b'\x01']
+    >>> number(stack.pop())
+    1
     '''
     stack.append(bytevector(number(stack.pop()) // 2))
 
@@ -1591,10 +1591,10 @@ def bytevector(number):
     if not number:
         return b''
     vector = struct.pack('<L', abs(number)).rstrip(b'\0')
-    if vector[-1] & 0x80:
+    if ord(vector[-1:]) & 0x80:
         vector += b'\0'
     if number < 0:
-        vector = vector[:-1] + bytes([vector[-1] | 0x80])
+        vector = vector[:-1] + struct.pack('B', ord(vector[-1:]) | 0x80)
     if len(vector) > 4:
         raise ValueError('%d is too large for Script numbers' % number)
     return vector

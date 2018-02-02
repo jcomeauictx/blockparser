@@ -18,6 +18,17 @@ if COMMAND in ['pydoc', 'doctest']:
 else:
     DOCTESTDEBUG = lambda *args, **kwargs: None
 
+# some Python3 to Python2 mappings
+if bytes([65]) != b'A':  # python2
+    bytes = lambda string: ''.join(map(chr, string))
+    bytevalue = lambda byte: ord(byte)
+    byte = chr
+    NO_SUCH_OPCODE = 'no such opcode %r'
+else:  # python3
+    bytevalue = lambda byte: byte
+    byte = lambda number: chr(number).encode('latin1')
+    NO_SUCH_OPCODE = 'no such opcode 0x%x'
+
 # each item in SCRIPT_OPS gives:
 #  its numeric value in hexadecimal;
 #  its "representation", most readable way to display the opcode;
@@ -500,8 +511,11 @@ SCRIPT_OPS += tuple(  # 0xb3 - 0xb9 are NOP_4 through NOP_10
 LOOKUP = dict([[value[0], key] for key, value in dict(SCRIPT_OPS).items()
               if re.compile('^-?[A-Z0-9]+$').match(value[0])])
 DISABLED = [  # add all opcodes disabled in bitcoin-core
-#    0x83, 0x84, 0x85, 0x86
+# make sure to list both by number and chr (for python2)
+    0x83, 0x84, 0x85, 0x86
 ]
+DISABLED.extend([byte(n) for n in list(DISABLED)])
+logging.debug('DISABLED: %s', DISABLED)
 COINBASE = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
 BASE58DIGITS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 FIRST = (
@@ -649,6 +663,8 @@ def parse(scriptbinary, display=True):
     stack = []
     kwargs = {}
     opcodes = dict(SCRIPT_OPS)
+    opcodes.update((byte(key), value) for key, value in list(opcodes.items()))
+    logging.debug('opcodes: %s', opcodes)
     kwargs['script'] = script = list(scriptbinary)  # gives list of `ord`s
     parsed = [None] * len(script)
     while script:
@@ -660,7 +676,7 @@ def parse(scriptbinary, display=True):
             stack.append(hex(opcode) + " (not yet implemented)")
         else:
             display_op = operation[0]
-            logging.debug('running 0x%x, %s', opcode, display_op)
+            logging.debug('running %r, %s', opcode, display_op)
             if display_op in LOOKUP:
                 stack.append(display_op)
             else:
@@ -691,7 +707,9 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     kwargs['altstack'] = []
     kwargs['mark'] = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
-    kwargs['script'] = script = list(map(ord, scriptbinary))
+    opcodes.update((byte(key), value) for key, value in list(opcodes.items()))
+    logging.debug('parameters: %s', kwargs)
+    kwargs['script'] = script = list(scriptbinary)
     kwargs['reference'] = list(script)  # make a copy
     kwargs['ifstack'] = []  # internal stack for each script
 
@@ -703,13 +721,13 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
             operation = opcodes.get(opcode, None)
             if operation is None:
                 logging.error('fatal error in %s, offset %s', txnew, txindex)
-                raise NotImplementedError('no such opcode 0x%x' % opcode)
+                raise NotImplementedError(NO_SUCH_OPCODE % opcode)
             else:
                 if kwargs['ifstack'] and not kwargs['ifstack'][-1]:
                     run_op = operation[2]
                 else:
                     run_op = operation[1]
-                logging.info('running operation 0x%x, %s', opcode, run_op)
+                logging.info('running operation %r, %s', opcode, run_op)
                 globals()[run_op](stack, **kwargs)
             logging.info('script: %r, stack: %s', script, stack)
     except (TransactionInvalidError, ReservedWordError) as failed:
@@ -875,7 +893,7 @@ def op_number(stack=None, **kwargs):
     '''
     push number from 1 ('TRUE') to 16 onto the stack
     '''
-    stack.append(bytes([kwargs['opcode'] - 0x50]))
+    stack.append(bytes([bytevalue(kwargs['opcode']) - 0x50]))
 
 def op_shownumber(stack=None, **kwargs):
     '''
@@ -888,7 +906,7 @@ def op_reserved(stack=None, **kwargs):
     '''
     reserved opcodes
     '''
-    raise ReservedWordError('Reserved opcode 0x%x' % kwargs['opcode'])
+    raise ReservedWordError('Reserved opcode %r' % kwargs['opcode'])
 
 def op_if(stack=None, **kwargs):
     '''

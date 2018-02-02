@@ -11,6 +11,13 @@ from blockparse import next_transaction, varint_length, show_hash, to_long
 from collections import OrderedDict
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
+COMMAND = os.path.splitext(os.path.split(sys.argv[0])[1])[0]
+
+if COMMAND in ['pydoc', 'doctest']:
+    DOCTESTDEBUG = logging.debug
+else:
+    DOCTESTDEBUG = lambda *args, **kwargs: None
+
 # each item in SCRIPT_OPS gives:
 #  its numeric value in hexadecimal;
 #  its "representation", most readable way to display the opcode;
@@ -1610,7 +1617,9 @@ def number(bytestring):
     try:
         msbs = ord(bytestring[-1:])
         sign, msbs = bool(msbs & 0x80), msbs & 0x7f
-        bytestring = bytestring[:-1] + bytes([msbs, 0, 0, 0])
+        DOCTESTDEBUG('sign: %s, msbs: %s', sign, msbs)
+        bytestring = bytestring[:-1] + struct.pack('B', msbs) + b'\0\0\0'
+        DOCTESTDEBUG('bytestring: %r', bytestring)
         return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
     except TypeError:
         try:

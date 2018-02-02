@@ -1128,8 +1128,8 @@ def op_left(stack=None, **kwargs):
 
     >>> stack = [b'this is a test', b'\4']
     >>> op_left(stack=stack)
-    >>> stack
-    [b'this']
+    >>> str(stack[-1].decode('utf8'))
+    'this'
     '''
     index = number(stack.pop());
     assert_true(index >= 0)
@@ -1199,8 +1199,8 @@ def op_equal(stack=None, **kwargs):
 
     >>> stack = [b'', b'\x80']
     >>> op_equal(stack=stack)
-    >>> stack
-    [b'\x01']
+    >>> number(stack.pop())
+    1
     '''
     operands = (number(stack.pop()), number(stack.pop()))
     stack.append(bytevector(operands[0] == operands[1]))
@@ -1239,8 +1239,8 @@ def op_2mul(stack=None, **kwargs):
 
     >>> stack = [b'\x03']
     >>> op_2mul(stack=stack)
-    >>> stack
-    [b'\x06']
+    >>> number(stack.pop())
+    6
     '''
     stack.append(bytevector(number(stack.pop()) * 2))
 

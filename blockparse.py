@@ -294,14 +294,15 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
         previous, blockhash = parsed[1], parsed[6]
         blocktime = timestamp(parsed[3])
         if previous != lastnode.blockhash:
-            logging.warning('out of order block %r', show_hash(blockhash))
+            logging.warning('reorder at block %s',
+                            Node(None, blockhash, blocktime))
             logging.debug('previous block should be: %s', show_hash(previous))
             logging.info('lastnode: %s', lastnode)
             found, count = None, 0
             try:
                 logging.debug('assuming previous block in this same chain')
                 found, count = lastnode.countback(previous)
-                logging.debug('reorder found %s %d blocks back',
+                logging.info('reorder found %s %d blocks back',
                               found, count + 2)
             except AttributeError:
                 logging.debug('searching other chains')
@@ -309,8 +310,8 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                     found = ([node for node in chain
                               if node.blockhash == previous] + [None])[0]
                     if found is not None:
-                        logging.debug('reorder found %s in another chain',
-                                      previous)
+                        logging.info('reorder found %s in another chain',
+                                      found)
                         break
             if found is None:
                 raise ValueError('Previous block %s not found', previous)

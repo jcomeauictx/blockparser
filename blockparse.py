@@ -302,7 +302,7 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             try:
                 logging.debug('assuming previous block in this same chain')
                 nodes = lastnode.countback(previous)
-                found = nodes[0]
+                found = nodes[0].parent
                 logging.info('reorder found %s %d blocks back',
                               found, len(nodes) + 1)
                 chain = len(chains)

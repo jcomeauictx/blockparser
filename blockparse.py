@@ -16,7 +16,8 @@ from __future__ import division, print_function
 import sys, os, struct, binascii, logging, hashlib
 from datetime import datetime
 from glob import glob
-logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
+LOGLEVEL = getattr(logging, os.getenv('LOGLEVEL', 'INFO'))
+logging.basicConfig(level=logging.DEBUG if __debug__ else LOGLEVEL)
 DEFAULT = sorted(glob(os.path.expanduser('~/.bitcoin/blocks/blk*.dat')))
 MAGIC = {
     'bitcoin': binascii.a2b_hex('F9BEB4D9'),
@@ -242,35 +243,34 @@ class Node(object):
         self.blockhash = blockhash
         self.blocktime = blocktime
 
-    def countback(self, searchblock=NULLBLOCK, limit=None):
+    def countback(self, searchblock=NULLBLOCK):
         r'''
-        return node and height of the chain that ends with this block
+        return list of nodes that ends with this block
 
-        if using a searchblock other than NULLBLOCK, caller is responsible
-        to add 1 to the result to get the actual number of blocks traversed
+        if attempting to get "height", caller is responsible to zero-base
+        the result, counting the genesis block as height 0
+
         >>> node = Node(None, NULLBLOCK)  # not a real node
         >>> node = Node(node, b'\0')  # height 0, genesis block
         >>> node = Node(node, b'\1')  # height 1
         >>> node = Node(node, b'\2')  # height 2
-        >>> node.countback()[1]
+        >>> len(node.countback())
+        3
+        >>> len(node.countback(b'\0'))
         2
-        >>> node.countback(b'\0')
-        ({'Node': {'hash': '00', 'timestamp': ''}}, 1)
         >>> try:
         ...  node.countback(None)
         ... except AttributeError:
         ...  print('failed')
         failed
         '''
-        count = 0
+        traversed = [self]
         parent = self.parent
         while parent.blockhash != searchblock:
             #logging.debug('parent.blockhash: %s', show_hash(parent.blockhash))
-            count += 1
+            traversed.insert(0, parent)
             parent = parent.parent
-            if limit and count == limit:
-                raise AttributeError('limit reached')
-        return parent, count
+        return traversed
 
     def __str__(self):
         return "{'Node': {'hash': '%s', 'timestamp': '%s'}}" % (
@@ -301,17 +301,28 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             found, count = None, 0
             try:
                 logging.debug('assuming previous block in this same chain')
-                found, count = lastnode.countback(previous)
+                nodes = lastnode.countback(previous)
                 logging.info('reorder found %s %d blocks back',
-                              found, count + 2)
+                              nodes[0], len(nodes) + 1)
+                chain = len(chains)
+                chains.append([])
             except AttributeError:
                 logging.debug('searching other chains')
+                for chain in reversed(chains):
+                    node = chain[-1]
+                    if node.blockhash == previous:
+                        logging.info('reorder found %s at end of another chain',
+                                      found)
+                        found = node
+                        chain = chains.index(chain)
                 for chain in reversed(chains):
                     found = ([node for node in chain
                               if node.blockhash == previous] + [None])[0]
                     if found is not None:
                         logging.info('reorder found %s in another chain',
                                       found)
+                        chain = len(chains)
+                        chains.append([])
                         break
             if found is None:
                 raise ValueError('Previous block %s not found', previous)
@@ -319,15 +330,13 @@ def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 lastnode = found
                 # sanity check on above programming
                 assert_true(previous == lastnode.blockhash)
-                chain = len(chains)
-                chains.append([])
         node = Node(lastnode, blockhash, blocktime)
         chains[chain].append(node)
         logging.info('current chain: %d out of %d', chain, len(chains))
         lastnode = node
-    logging.info('final [real] height: %d out of %d',
-                 chains[chain][-1].countback()[1], height)
-    print(chains)
+    nodes = chains[chain][-1].countback()
+    logging.info('final [real] height: %d out of %d', len(nodes) - 1, height)
+    print(nodes)
 
 def parse_transaction(data):
     '''

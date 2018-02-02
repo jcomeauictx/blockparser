@@ -747,8 +747,9 @@ def addr_to_hash(address, check_validity=True):
     r'''
     convert address back to its hash160
 
-    >>> addr_to_hash('3BTChqkFai51wFwrHSVdvSW9cPXifrJ7jC')
-    b'k\x14o\x13~~\x8a\xa6a\xb3QZ\xc8\x85l\xbc\xe0a\xa3\xf2'
+    >>> str(b2a_hex(addr_to_hash(
+    ...  '3BTChqkFai51wFwrHSVdvSW9cPXifrJ7jC')).decode('utf8'))
+    '6b146f137e7e8aa661b3515ac8856cbce061a3f2'
     '''
     binary = base58decode(address)
     logging.debug('binary: %r', binary)

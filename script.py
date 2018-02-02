@@ -1142,8 +1142,8 @@ def op_right(stack=None, **kwargs):
 
     >>> stack = [b'this is a test', b'\4']
     >>> op_right(stack=stack)
-    >>> stack
-    [b' is a test']
+    >>> str(stack.pop().decode('utf8'))
+    ' is a test'
     '''
     index = number(stack.pop());
     assert_true(index >= 0)
@@ -1156,12 +1156,12 @@ def op_size(stack=None, **kwargs):
 
     >>> stack = [b'']
     >>> op_size(stack=stack)
-    >>> stack
-    [b'', b'']
+    >>> stack == [b'', b'']
+    True
     >>> stack = [b'this is a test']
     >>> op_size(stack=stack)
-    >>> stack
-    [b'this is a test', b'\x0e']
+    >>> stack == [b'this is a test', b'\x0e']
+    True
     '''
     stack.append(bytevector(len(stack[-1])))
 
@@ -1256,13 +1256,13 @@ def op_2div(stack=None, **kwargs):
     stack.append(bytevector(number(stack.pop()) // 2))
 
 def op_negate(stack=None, **kwargs):
-    '''
+    r'''
     the sign of the input is flipped
 
     >>> stack = [b'\x03']
     >>> op_negate(stack=stack)
-    >>> stack
-    [b'\x83']
+    >>> number(stack.pop())
+    -3
     '''
     stack.append(bytevector(-number(stack.pop())))
 
@@ -1416,13 +1416,12 @@ def op_within(stack=None, **kwargs):
 
     >>> stack = [-1, 0, 4]
     >>> op_within(stack=stack)
-    >>> stack
-    [b'']
-
+    >>> stack == [b'']
+    True
     >>> stack = [0, 0, 4]
     >>> op_within(stack=stack)
-    >>> stack
-    [b'\x01']
+    >>> stack == [b'\x01']
+    True
     '''
     range_x = list(reversed([number(stack.pop()), number(stack.pop())]))
     x = number(stack.pop())

@@ -24,12 +24,10 @@ if bytes([65]) != b'A':  # python2
     bytevalue = lambda byte: ord(byte)
     bytevalues = lambda string: map(ord, string)
     byte = chr
-    NO_SUCH_OPCODE = 'no such opcode %r'
 else:  # python3
     bytevalue = lambda byte: byte
     bytevalues = list
     byte = lambda number: chr(number).encode('latin1')
-    NO_SUCH_OPCODE = 'no such opcode 0x%x'
 
 # each item in SCRIPT_OPS gives:
 #  its numeric value in hexadecimal;
@@ -675,12 +673,12 @@ def parse(scriptbinary, display=True):
         parsed[-len(script)] = script[0]
         kwargs['opcode'] = opcode = script.pop(0)
         operation = opcodes.get(opcode, None)
-        logging.debug('opcode: %r, operation: %r', opcode, operation)
+        logging.debug('opcode: 0x%x, operation: %r', opcode, operation)
         if operation is None:
             stack.append(hex(opcode) + " (not yet implemented)")
         else:
             display_op = operation[0]
-            logging.debug('running %r, %s', opcode, display_op)
+            logging.debug('running 0x%x, %s', opcode, display_op)
             if display_op in LOOKUP:
                 stack.append(display_op)
             else:
@@ -724,13 +722,13 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
             operation = opcodes.get(opcode, None)
             if operation is None:
                 logging.error('fatal error in %s, offset %s', txnew, txindex)
-                raise NotImplementedError(NO_SUCH_OPCODE % opcode)
+                raise NotImplementedError('No such opcode %x' % opcode)
             else:
                 if kwargs['ifstack'] and not kwargs['ifstack'][-1]:
                     run_op = operation[2]
                 else:
                     run_op = operation[1]
-                logging.info('running operation %r, %s', opcode, run_op)
+                logging.info('running operation 0x%x, %s', opcode, run_op)
                 globals()[run_op](stack, **kwargs)
             logging.info('script: %r, stack: %s', script, stack)
     except (TransactionInvalidError, ReservedWordError) as failed:
@@ -909,7 +907,7 @@ def op_reserved(stack=None, **kwargs):
     '''
     reserved opcodes
     '''
-    raise ReservedWordError('Reserved opcode %r' % kwargs['opcode'])
+    raise ReservedWordError('Reserved opcode 0x%x' % kwargs['opcode'])
 
 def op_if(stack=None, **kwargs):
     '''
@@ -1538,7 +1536,7 @@ def op_checksig(stack=None, **kwargs):
                       txcopy, txcopy[2], txcopy[2][0])
         raise
     serialized = tx_serialize(txcopy) + hashtype_code
-    logging.debug('serialized with hashtype_code: %s', serialized)
+    logging.debug('serialized with hashtype_code: %r', serialized)
     hashed = op_hash256(stack=[serialized])
     logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
     key = CECKey()

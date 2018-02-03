@@ -516,7 +516,6 @@ DISABLED = [  # add all opcodes disabled in bitcoin-core
 # make sure to list both by number and chr (for python2)
     0x83, 0x84, 0x85, 0x86
 ]
-DISABLED.extend([byte(n) for n in list(DISABLED)])
 logging.debug('DISABLED: %s', DISABLED)
 COINBASE = b'\0' * 32  # previous_tx hash all nulls indicates coinbase tx
 BASE58DIGITS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
@@ -669,7 +668,6 @@ def parse(scriptbinary, display=True):
     stack = []
     kwargs = {}
     opcodes = dict(SCRIPT_OPS)
-    opcodes.update((byte(key), value) for key, value in list(opcodes.items()))
     #logging.debug('opcodes: %s', opcodes)
     kwargs['script'] = script = bytevalues(scriptbinary)
     parsed = [None] * len(script)
@@ -713,7 +711,6 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     kwargs['altstack'] = []
     kwargs['mark'] = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
-    opcodes.update((byte(key), value) for key, value in list(opcodes.items()))
     logging.debug('parameters: %s', kwargs)
     kwargs['script'] = script = bytevalues(scriptbinary)
     kwargs['reference'] = list(script)  # make a copy

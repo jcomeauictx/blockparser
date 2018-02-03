@@ -21,8 +21,12 @@ else:
 # some Python3 to Python2 mappings
 if bytes([65]) != b'A':  # python2
     class bytes(str):
-        def __new__(cls, numberlist=''):
-            return super(bytes, cls).__new__(cls, ''.join(map(chr, numberlist)))
+        def __new__(cls, initial=''):
+            if type(initial) == list:
+                joined = ''.join(map(chr, initial))
+                return super(bytes, cls).__new__(cls, joined)
+            else:
+                return super(bytes, cls).__new__(cls, initial)
         def __repr__(self):
             return 'b' + super(bytes, self).__repr__()
         __str__ = __repr__
@@ -627,7 +631,7 @@ def script_compile(script):
     >>> test == check
     True
     '''
-    compiled = b''
+    compiled = bytes(b'')
     for word in script:
         if word in LOOKUP:
             compiled += bytes([LOOKUP[word]])
@@ -646,20 +650,21 @@ def script_compile(script):
                 compiled += bytes([word + 0x50])
                 continue
             elif abs(word) <= 127:
-                word = struct.pack('B', word | [0, 0x80][word < 0])
+                word = bytes(struct.pack('B', word | [0, 0x80][word < 0]))
             elif abs(word) <= 32767:
-                word = struct.pack('<H', word | [0, 0x8000][word < 0])
+                word = bytes(struct.pack('<H', word | [0, 0x8000][word < 0]))
             else:  # let's not bother with 3-byte representations
-                word = struct.pack('<L', word | [0, 0x80000000][word < 0])
+                word = bytes(struct.pack(
+                    '<L', word | [0, 0x80000000][word < 0]))
         # by now, word is assumed to be a bytestring
         if len(word) <= 75:
-            compiled += bytes([len(word)]) + word
+            compiled += bytes([len(word)]) + bytes(word)
         elif len(word) <= 0xff:
-            compiled += b'\x4c' + struct.pack('B', len(word)) + word
+            compiled += bytes(b'\x4c' + struct.pack('B', len(word)) + word)
         elif len(word) <= 0xffff:
-            compiled += b'\x4d' + struct.pack('<H', len(word)) + word
+            compiled += bytes(b'\x4d' + struct.pack('<H', len(word)) + word)
         else:
-            compiled += b'\x4e' + struct.pack('<L', len(word)) + word
+            compiled += bytes(b'\x4e' + struct.pack('<L', len(word)) + word)
     return compiled
 
 def parse(scriptbinary, display=True):
@@ -853,7 +858,7 @@ def op_false(stack=None, **kwargs):
     '''
     pushes a zero-length bytestring that indicates False
     '''
-    stack.append(b'')
+    stack.append(bytes(b''))
 
 def op_pushdata(stack=None, **kwargs):
     '''

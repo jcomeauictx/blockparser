@@ -16,6 +16,26 @@ from __future__ import division, print_function
 import sys, os, struct, binascii, logging, hashlib
 from datetime import datetime
 from glob import glob
+# some Python3 to Python2 mappings
+if bytes([65]) != b'A':  # python2
+    class bytes(str):
+        def __new__(cls, initial=''):
+            if type(initial) == list:
+                joined = ''.join(map(chr, initial))
+                return super(bytes, cls).__new__(cls, joined)
+            else:
+                return super(bytes, cls).__new__(cls, initial)
+        def __repr__(self):
+            return 'b' + super(bytes, self).__repr__()
+        __str__ = __repr__
+    bytevalue = lambda byte: ord(byte)
+    bytevalues = lambda string: map(ord, string)
+    byte = chr
+else:  # python3
+    bytevalue = lambda byte: byte
+    bytevalues = list
+    byte = lambda number: chr(number).encode('latin1')
+
 LOGLEVEL = getattr(logging, os.getenv('LOGLEVEL', 'INFO'))
 logging.basicConfig(level=logging.DEBUG if __debug__ else LOGLEVEL)
 DEFAULT = sorted(glob(os.path.expanduser('~/.bitcoin/blocks/blk*.dat')))

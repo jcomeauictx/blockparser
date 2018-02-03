@@ -719,7 +719,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     kwargs['altstack'] = []
     kwargs['mark'] = [0]  # append a mark for every OP_CODESEPARATOR found
     opcodes = dict(SCRIPT_OPS)
-    logging.debug('parameters: %s', kwargs)
+    #logging.debug('parameters: %s', kwargs)
     kwargs['script'] = script = bytevalues(scriptbinary)
     kwargs['reference'] = list(script)  # make a copy
     kwargs['ifstack'] = []  # internal stack for each script
@@ -866,7 +866,7 @@ def op_pushdata(stack=None, **kwargs):
 
     see the `Constants` section of https://en.bitcoin.it/wiki/Script
     '''
-    logging.debug('kwargs: %s', kwargs)
+    #logging.debug('kwargs: %s', kwargs)
     script = kwargs['script']
     opcode = kwargs['opcode']
     stack.append(bytes(script[:opcode]))
@@ -1533,7 +1533,7 @@ def op_checksig(stack=None, **kwargs):
             checker.pop(offset)
             subscript.pop(offset)
     hashtype = signature.pop()
-    hashtype_code = struct.pack('<L', hashtype)
+    hashtype_code = bytes(struct.pack('<L', hashtype))
     txcopy = copy.deepcopy(txnew)
     for input in txcopy[2]:
         input[2] = b'\0'
@@ -1546,7 +1546,7 @@ def op_checksig(stack=None, **kwargs):
         logging.error('txcopy: %r, txcopy[2]: %r, txcopy[2][0]: %r',
                       txcopy, txcopy[2], txcopy[2][0])
         raise
-    serialized = tx_serialize(txcopy) + hashtype_code
+    serialized = bytes(tx_serialize(txcopy) + hashtype_code)
     logging.debug('serialized with hashtype_code: %r', serialized)
     hashed = op_hash256(stack=[serialized])
     logging.debug('signature: %r, pubkey: %r', bytes(signature), pubkey)
@@ -1669,7 +1669,7 @@ def tx_serialize(transaction):
     copied = list(transaction)
     copied[2] = b''.join([b''.join(item) for item in copied[2]])
     copied[4] = b''.join([b''.join(item) for item in copied[4]])
-    return b''.join(copied)
+    return bytes(b''.join(copied))
 
 # and now some routines for testing and analyzing blockchains
 

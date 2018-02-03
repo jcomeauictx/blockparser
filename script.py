@@ -9,14 +9,16 @@ from binascii import b2a_hex, a2b_hex
 from bitcoin.core.key import CECKey
 from blockparse import next_transaction, varint_length, show_hash, to_long
 from collections import OrderedDict
-logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 COMMAND = os.path.splitext(os.path.split(sys.argv[0])[1])[0]
+LOGLEVEL = getattr(logging, os.getenv('LOGLEVEL', 'INFO'))
 
 if COMMAND in ['pydoc', 'doctest']:
     DOCTESTDEBUG = logging.debug
 else:
     DOCTESTDEBUG = lambda *args, **kwargs: None
+
+logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # some Python3 to Python2 mappings
 if bytes([65]) != b'A':  # python2
@@ -1798,9 +1800,9 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 count += 1
                 spendcount += 1
                 break  # out of inner loop
-    logging.info('final tally:')
-    logging.info('%d scripts executed successfully', count)
-    logging.info('%d of those were spends', spendcount)
+    print('final tally:')
+    print('%d scripts executed successfully' % count)
+    print('%d of those were spends' % spendcount)
 
 def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
     '''

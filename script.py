@@ -1517,9 +1517,9 @@ def op_checksig(stack=None, **kwargs):
     logging.debug('op_checksig stack: %s, reference: %s, mark: %s',
                   stack, reference, mark)
     pubkey = stack.pop()
-    signature = list(stack.pop())
+    signature = bytevalues(stack.pop())
     subscript = reference[mark[-1]:]
-    checker = list(parsed[mark[-1]:])  # for checking for OP_CODESEPARATORs
+    checker = list(parsed[mark[-1]:])  # checking for OP_CODESEPARATORs
     # remove OP_CODESEPARATORs in subscript
     # only safe way to do this is to work backwards using positive indices
     for offset in range(len(checker) - 1, 0, -1):

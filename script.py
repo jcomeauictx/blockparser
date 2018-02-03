@@ -23,8 +23,9 @@ if bytes([65]) != b'A':  # python2
     class bytes(str):
         def __new__(cls, numberlist=''):
             return super(bytes, cls).__new__(cls, ''.join(map(chr, numberlist)))
-        def __str__(self):
+        def __repr__(self):
             return 'b' + super(bytes, self).__repr__()
+        __str__ = __repr__
     bytevalue = lambda byte: ord(byte)
     bytevalues = lambda string: map(ord, string)
     byte = chr

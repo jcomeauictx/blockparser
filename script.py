@@ -22,10 +22,12 @@ else:
 if bytes([65]) != b'A':  # python2
     bytes = lambda string: ''.join(map(chr, string))
     bytevalue = lambda byte: ord(byte)
+    bytevalues = lambda string: map(ord, string)
     byte = chr
     NO_SUCH_OPCODE = 'no such opcode %r'
 else:  # python3
     bytevalue = lambda byte: byte
+    bytevalues = list
     byte = lambda number: chr(number).encode('latin1')
     NO_SUCH_OPCODE = 'no such opcode 0x%x'
 
@@ -629,7 +631,11 @@ def script_compile(script):
             compiled += bytes([LOOKUP[word]])
             continue
         elif type(word) == str:
-            word = a2b_hex(word)
+            try:
+                word = a2b_hex(word)
+            except TypeError:
+                logging.warning('%r is not hex, assuming already bytes', word)
+                pass
         elif type(word) == int:
             if word in [0, 1, -1]:  # there's a word for that
                 compiled += script_compile([['FALSE', 'TRUE', '-1'][word]])
@@ -664,8 +670,8 @@ def parse(scriptbinary, display=True):
     kwargs = {}
     opcodes = dict(SCRIPT_OPS)
     opcodes.update((byte(key), value) for key, value in list(opcodes.items()))
-    logging.debug('opcodes: %s', opcodes)
-    kwargs['script'] = script = list(scriptbinary)  # gives list of `ord`s
+    #logging.debug('opcodes: %s', opcodes)
+    kwargs['script'] = script = bytevalues(scriptbinary)
     parsed = [None] * len(script)
     while script:
         parsed[-len(script)] = script[0]
@@ -709,7 +715,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
     opcodes = dict(SCRIPT_OPS)
     opcodes.update((byte(key), value) for key, value in list(opcodes.items()))
     logging.debug('parameters: %s', kwargs)
-    kwargs['script'] = script = list(scriptbinary)
+    kwargs['script'] = script = bytevalues(scriptbinary)
     kwargs['reference'] = list(script)  # make a copy
     kwargs['ifstack'] = []  # internal stack for each script
 
@@ -893,7 +899,7 @@ def op_number(stack=None, **kwargs):
     '''
     push number from 1 ('TRUE') to 16 onto the stack
     '''
-    stack.append(bytes([bytevalue(kwargs['opcode']) - 0x50]))
+    stack.append(bytes([kwargs['opcode'] - 0x50]))
 
 def op_shownumber(stack=None, **kwargs):
     '''

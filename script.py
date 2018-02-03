@@ -20,12 +20,11 @@ else:
 
 # some Python3 to Python2 mappings
 if bytes([65]) != b'A':  # python2
-    class Bytes(str):
+    class bytes(str):
         def __new__(cls, numberlist=''):
-            return super(Bytes, cls).__new__(cls, ''.join(map(chr, numberlist)))
+            return super(bytes, cls).__new__(cls, ''.join(map(chr, numberlist)))
         def __str__(self):
-            return 'b' + super(Bytes, self).__repr__()
-    bytes = Bytes
+            return 'b' + super(bytes, self).__repr__()
     bytevalue = lambda byte: ord(byte)
     bytevalues = lambda string: map(ord, string)
     byte = chr

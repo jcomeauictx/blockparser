@@ -20,7 +20,12 @@ else:
 
 # some Python3 to Python2 mappings
 if bytes([65]) != b'A':  # python2
-    bytes = lambda string: ''.join(map(chr, string))
+    class Bytes(str):
+        def __new__(cls, numberlist=''):
+            return super(Bytes, cls).__new__(cls, ''.join(map(chr, numberlist)))
+        def __str__(self):
+            return 'b' + super(Bytes, self).__repr__()
+    bytes = Bytes
     bytevalue = lambda byte: ord(byte)
     bytevalues = lambda string: map(ord, string)
     byte = chr
@@ -859,7 +864,8 @@ def op_pushdata(stack=None, **kwargs):
     logging.debug('kwargs: %s', kwargs)
     script = kwargs['script']
     opcode = kwargs['opcode']
-    stack.append(bytes(script.pop(0) for i in range(opcode)))
+    stack.append(bytes(script[:opcode]))
+    script[:opcode] = []
 
 def op_pushdata1(stack=None, **kwargs):
     '''
@@ -1663,8 +1669,19 @@ def tx_serialize(transaction):
 # and now some routines for testing and analyzing blockchains
 
 def test_checksig(current_tx, txin_index, previous_tx):
-    '''
+    r'''
     display and run scripts in given transactions to test OP_CHECKSIG
+
+    >>> test_checksig(PIZZA[0], 0, PIZZA[1])
+    b'0E\x02!\x00\x99\x08\x14L\xa6S\x9e\tQ+\x92\x95\xc8\xa2pP\xd4x\xfb\xb9o\x8a\xdd\xbc=\x07UD\xdcA2\x87\x02 \x1a\xa5(\xbe+\x90}1m-\xa0h\xdd\x9e\xb1\xe22C\xd9~DMY)\r/\xdd\xf2Ri\xee\x0e\x01'
+    b'\x04.\x93\x0f9\xbab\xc6SN\xe9\x8e\xd2\x0c\xa9\x89Y\xd3J\xa9\xe0W\xcd\xa0\x1c\xfdB,k\xab6g\xb7d&R\x93\x82\xc2?B\xb9\xb0\x8dx2\xd4\xfe\xe1\xd6\xb47\xa8RnYf|\xe9\xc4\xe9\xdc\xeb\xca\xbb'
+    -----
+    DUP
+    HASH160
+    b"F\xaf?\xb4\x81\x83\x7f\xad\xbbB\x17'\xf9\x95\x9c-2\xa3h)"
+    EQUALVERIFY
+    CHECKSIG
+    -----
     '''
     stack = []
     logging.debug('parsing and displaying current txin script...')

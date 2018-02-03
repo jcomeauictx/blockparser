@@ -1647,7 +1647,7 @@ def number(bytestring):
         msbs = ord(bytestring[-1:])
         sign, msbs = bool(msbs & 0x80), msbs & 0x7f
         DOCTESTDEBUG('sign: %s, msbs: %s', sign, msbs)
-        bytestring = bytestring[:-1] + struct.pack('B', msbs) + b'\0\0\0'
+        bytestring = bytes(bytestring[:-1] + struct.pack('B', msbs) + b'\0\0\0')
         DOCTESTDEBUG('bytestring: %r', bytestring)
         return [1, -1][sign] * struct.unpack('<L', bytestring[:4])[0]
     except TypeError:

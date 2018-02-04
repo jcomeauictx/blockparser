@@ -734,7 +734,7 @@ def run(scriptbinary, txnew, txindex, parsed, stack=None):
             operation = opcodes.get(opcode, None)
             if operation is None:
                 logging.error('fatal error in %s, offset %s', txnew, txindex)
-                raise NotImplementedError('No such opcode %x' % opcode)
+                raise NotImplementedError('No such opcode 0x%x' % opcode)
             else:
                 if kwargs['ifstack'] and not kwargs['ifstack'][-1]:
                     run_op = operation[2]
@@ -1770,7 +1770,12 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             stack = []
             txin_script = txin[3]
             parsed, readable = parse(txin_script, display=False)
-            run(txin_script, transaction, txindex, parsed, stack)
+            try:
+                run(txin_script, transaction, txindex, parsed, stack)
+            except NotImplementedError as bad_script:
+                logging.exception(
+                    'input script at offset %d in transaction %s failed',
+                    txindex, tx_hash)
             logging.debug('checking result on stack: %s', stack)
             result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)

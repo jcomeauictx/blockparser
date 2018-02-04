@@ -12,13 +12,12 @@ from collections import OrderedDict
 
 COMMAND = os.path.splitext(os.path.split(sys.argv[0])[1])[0]
 LOGLEVEL = getattr(logging, os.getenv('LOGLEVEL', 'INFO'))
+logging.getLogger().level=logging.DEBUG if __debug__ else LOGLEVEL
 
 if COMMAND in ['pydoc', 'doctest']:
     DOCTESTDEBUG = logging.debug
 else:
     DOCTESTDEBUG = lambda *args, **kwargs: None
-
-logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
 
 # some Python3 to Python2 mappings
 if bytes([65]) != b'A':  # python2
@@ -1775,7 +1774,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             except NotImplementedError as bad_script:
                 logging.exception(
                     'input script at offset %d in transaction %s failed',
-                    txindex, tx_hash)
+                    txindex, show_hash(tx_hash))
             logging.debug('checking result on stack: %s', stack)
             result = bool(stack and stack[-1])
             logging.info('%d scripts executed successfully', count)

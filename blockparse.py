@@ -37,7 +37,7 @@ else:  # python3
     byte = lambda number: chr(number).encode('latin1')
 
 LOGLEVEL = getattr(logging, os.getenv('LOGLEVEL', 'INFO'))
-logging.basicConfig(level=logging.DEBUG if __debug__ else LOGLEVEL)
+logging.getLogger().level=logging.DEBUG if __debug__ else LOGLEVEL
 DEFAULT = sorted(glob(os.path.expanduser('~/.bitcoin/blocks/blk*.dat')))
 MAGIC = {
     'bitcoin': binascii.a2b_hex('F9BEB4D9'),

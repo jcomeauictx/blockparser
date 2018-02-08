@@ -55,7 +55,7 @@ VARINT = {
     0xff: ('<Q', 1, 8),
 }
 # extend VARINT for Python2:
-VARINT.update({chr(n): l for n, l in VARINT.items()})
+VARINT.update(dict((chr(n), l) for n, l in VARINT.items()))
 
 UNPACKER = {
     # fetch using len(bytestring)

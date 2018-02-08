@@ -47,5 +47,5 @@ clean:
 %.doctest: %.py
 	python3 -m doctest $<
 	python -m doctest $<
-doctest: script.doctest blockparse.doctest
+doctests: script.doctest blockparse.doctest
 -include .deps/*

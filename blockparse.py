@@ -13,7 +13,7 @@ it won't work the same but has the same general purpose, to present block
 files in a readable format.
 '''
 from __future__ import division, print_function
-import sys, os, struct, binascii, logging, hashlib
+import sys, os, struct, binascii, logging, hashlib, re
 from datetime import datetime
 from glob import glob
 # some Python3 to Python2 mappings
@@ -66,6 +66,43 @@ UNPACKER = {
 }
 
 NULLBLOCK = b'\0' * 32  # pointed to by genesis block
+
+def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+    '''
+    generator that fetches and returns raw blocks out of blockfiles
+
+    with defaults, waits forever until terminated by signal
+    '''
+    minheight, maxheight = int(minblock), int(maxblock)
+    height = 0
+    reversemagic = dict([[value, key] for key, value in MAGIC.items()])
+    blockfiles = blockfiles or DEFAULT
+    fileindex = 0
+    currentfile = None
+    while True:
+        if currentfile is None:
+            currentfile = open(blockfiles[fileindex], 'rb')
+
+def nextfile(filename):
+    '''
+    returns "next" filename in series from numbered files e.g. blk0001.dat
+
+    >>> nextfile('blk0001.dat')
+    'blk0002.dat'
+    >>> try: nextfile('blk.dat')
+    ... except: pass
+    >>> nextfile('00041')
+    '00042'
+    '''
+    pattern = r'^(?P<prefix>[^0-9]*)(?P<number>[0-9]+)(?P<suffix>[^0-9]*)$'
+    try:
+        match = re.compile(pattern).match(filename).groupdict()
+    except AttributeError as match_failed:
+        raise ValueError('No numeric pattern found in {}'.format(filename))
+    newnumber = '{number:0{width}}'.format(
+        number=int(match['number']) + 1,
+        width=len(match['number']))
+    return match['prefix'] + newnumber + match['suffix']
 
 def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''

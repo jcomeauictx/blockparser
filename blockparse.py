@@ -31,6 +31,7 @@ if bytes([65]) != b'A':  # python2
     bytevalue = lambda byte: ord(byte)
     bytevalues = lambda string: map(ord, string)
     byte = chr
+    FileNotFoundError = IOError
 else:  # python3
     bytevalue = lambda byte: byte
     bytevalues = list
@@ -79,9 +80,27 @@ def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     blockfiles = blockfiles or DEFAULT
     fileindex = 0
     currentfile = None
+    header = ''
     while True:
         if currentfile is None:
-            currentfile = open(blockfiles[fileindex], 'rb')
+            try:
+                newfile = open(blockfiles[fileindex], 'rb')
+                fileindex += 1
+                if fileindex == len(blockfiles):
+                    blockfiles.append(nextfile(blockfiles[-1]))
+                currentfile = newfile
+            except FileNotFoundError:
+                logging.debug('waiting for {} to come online',
+                              blockfiles[fileindex])
+                time.sleep(10)
+                continue
+        readable = select([currentfile], [], [], 10)[0]
+        if not readable:
+            logging.debug('waiting for data from {}', blockfiles[fileindex])
+            continue
+        header = currentfile.read(8)
+        magic = header[:4]
+        blocksize = struct.unpack('<L', header[4:])[0]
 
 def nextfile(filename):
     '''
@@ -95,6 +114,7 @@ def nextfile(filename):
     '00042'
     '''
     pattern = r'^(?P<prefix>[^0-9]*)(?P<number>[0-9]+)(?P<suffix>[^0-9]*)$'
+    directory, filename = os.path.split(filename)
     try:
         match = re.compile(pattern).match(filename).groupdict()
     except AttributeError as match_failed:
@@ -102,7 +122,8 @@ def nextfile(filename):
     newnumber = '{number:0{width}}'.format(
         number=int(match['number']) + 1,
         width=len(match['number']))
-    return match['prefix'] + newnumber + match['suffix']
+    filename = match['prefix'] + newnumber + match['suffix']
+    return os.path.join(directory, filename) if directory else filename
 
 def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''

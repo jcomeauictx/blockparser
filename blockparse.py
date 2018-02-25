@@ -13,7 +13,7 @@ it won't work the same but has the same general purpose, to present block
 files in a readable format.
 '''
 from __future__ import division, print_function
-import sys, os, struct, binascii, logging, hashlib, re
+import sys, os, struct, binascii, logging, hashlib, re, time
 from datetime import datetime
 from glob import glob
 # some Python3 to Python2 mappings
@@ -68,6 +68,18 @@ UNPACKER = {
 
 NULLBLOCK = b'\0' * 32  # pointed to by genesis block
 
+def nextprefix(openfile):
+    '''
+    helper function for nextchunk
+
+    tries to read block prefix from an open file
+    '''
+    try:
+        prefix = openfile.read(8)
+    except AttributeError:  # openfile is Null
+        prefix = b''
+    return prefix
+
 def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     generator that fetches and returns raw blocks out of blockfiles
@@ -80,9 +92,9 @@ def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     blockfiles = blockfiles or DEFAULT
     fileindex = 0
     currentfile = None
-    header = ''
     while True:
-        if currentfile is None:
+        prefix = nextprefix(currentfile)
+        if prefix == b'':
             try:
                 newfile = open(blockfiles[fileindex], 'rb')
                 fileindex += 1
@@ -90,17 +102,14 @@ def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                     blockfiles.append(nextfile(blockfiles[-1]))
                 currentfile = newfile
             except FileNotFoundError:
-                logging.debug('waiting for {} to come online',
+                logging.debug('waiting for %s to come online',
                               blockfiles[fileindex])
                 time.sleep(10)
-                continue
-        readable = select([currentfile], [], [], 10)[0]
-        if not readable:
-            logging.debug('waiting for data from {}', blockfiles[fileindex])
             continue
-        header = currentfile.read(8)
-        magic = header[:4]
-        blocksize = struct.unpack('<L', header[4:])[0]
+        magic = prefix[:4]
+        blocksize = struct.unpack('<L', prefix[4:])[0]
+        logging.debug('yielding block of size %d', blocksize)
+        yield currentfile.read(blocksize)
 
 def nextfile(filename):
     '''

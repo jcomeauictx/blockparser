@@ -80,7 +80,7 @@ def nextprefix(openfile):
         prefix = b''
     return prefix
 
-def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize, wait=True):
     '''
     generator that fetches and returns raw blocks out of blockfiles
 
@@ -92,6 +92,7 @@ def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     blockfiles = blockfiles or DEFAULT
     fileindex = 0
     currentfile = None
+    done = False
     while True:
         prefix = nextprefix(currentfile)
         if prefix == b'':
@@ -102,14 +103,21 @@ def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                     blockfiles.append(nextfile(blockfiles[-1]))
                 currentfile = newfile
             except FileNotFoundError:
-                logging.debug('waiting for %s to come online',
-                              blockfiles[fileindex])
-                time.sleep(10)
-            continue
-        magic = prefix[:4]
-        blocksize = struct.unpack('<L', prefix[4:])[0]
-        logging.debug('yielding block of size %d', blocksize)
-        yield currentfile.read(blocksize)
+                if not wait:
+                    logging.info('end of current data, not waiting')
+                    done = True
+                else:
+                    logging.debug('waiting for %s to come online',
+                                  blockfiles[fileindex])
+                    time.sleep(10)
+                    continue
+            if done:
+                raise StopIteration('No more blocks at this time')
+        else:
+            magic = prefix[:4]
+            blocksize = struct.unpack('<L', prefix[4:])[0]
+            logging.debug('yielding block of size %d', blocksize)
+            yield prefix + currentfile.read(blocksize)
 
 def nextfile(filename):
     '''

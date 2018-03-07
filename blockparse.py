@@ -76,7 +76,7 @@ def nextprefix(openfile):
     '''
     try:
         prefix = openfile.read(8)
-    except AttributeError:  # openfile is Null
+    except AttributeError:  # openfile is None
         prefix = b''
     return prefix
 

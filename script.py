@@ -1404,7 +1404,7 @@ def op_lessthan(stack=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) > number(stack.pop())))
 
-def op_greaterthen(stack=None, **kwargs):
+def op_greaterthan(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return 1 if a > b, else 0
 

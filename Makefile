@@ -1,5 +1,6 @@
 SHELL := /bin/sh
 MAKEFLAGS := -j8
+PYTHONPATH := ../python-bitcoinlib
 
 CPLUS := g++
 

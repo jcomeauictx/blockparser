@@ -655,7 +655,7 @@ def script_compile(script):
         elif type(word) != type(b''):
             logging.debug('trying to convert %s to bytes', word)
             try:
-                word = a2b_hex(word)
+                word = a2b_hex(word.encode())
             except TypeError:
                 logging.warning('%r is not hex, assuming already bytes', word)
                 pass

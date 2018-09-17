@@ -41,12 +41,12 @@ LOGLEVEL = getattr(logging, os.getenv('LOGLEVEL', 'INFO'))
 logging.getLogger().level=logging.DEBUG if __debug__ else LOGLEVEL
 DEFAULT = sorted(glob(os.path.expanduser('~/.bitcoin/blocks/blk*.dat')))
 MAGIC = {
-    'bitcoin': binascii.a2b_hex('F9BEB4D9'),
-    'dogecoin': binascii.a2b_hex('C0C0C0C0'),
-    'testnet': binascii.a2b_hex('FABFB5DA'),
-    'testnet3': binascii.a2b_hex('0B110907'),
-    'namecoin': binascii.a2b_hex('F9BEB4FE'),
-    'americancoin': binascii.a2b_hex('414D433A'),
+    'bitcoin': binascii.a2b_hex(b'F9BEB4D9'),
+    'dogecoin': binascii.a2b_hex(b'C0C0C0C0'),
+    'testnet': binascii.a2b_hex(b'FABFB5DA'),
+    'testnet3': binascii.a2b_hex(b'0B110907'),
+    'namecoin': binascii.a2b_hex(b'F9BEB4FE'),
+    'americancoin': binascii.a2b_hex(b'414D433A'),
 }
 VARINT = {
     # struct format, offset, length

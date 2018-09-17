@@ -809,7 +809,7 @@ def hash_to_addr(hash160, padding=b'\0'):
     convert address hash to its base58 form
 
     >>> hash_to_addr(
-    ...  a2b_hex('6b146f137e7e8aa661b3515ac8856cbce061a3f2'), b'\x05')
+    ...  a2b_hex('6b146f137e7e8aa661b3515ac8856cbce061a3f2'.encode()), b'\x05')
     '3BTChqkFai51wFwrHSVdvSW9cPXifrJ7jC'
     '''
     intermediate = padding + hash160
@@ -826,7 +826,7 @@ def pubkey_to_hash(pubkey):
     >>> pubkey = ('043946a3002f7e56bad8f134f9b34282906a1ff5c54d9a60'
     ...           'd47ef691c453bf5e1706d314b474399f6dab5088cf0c9ac2'
     ...           '8543c6f13b66aef3e1ff80d5e14111f7be')
-    >>> hashed = pubkey_to_hash(a2b_hex(pubkey))
+    >>> hashed = pubkey_to_hash(a2b_hex(pubkey.encode()))
     >>> hash_to_addr(hashed)
     '1Q7f2rL2irjpvsKVys5W2cmKJYss82rNCy'
     '''

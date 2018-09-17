@@ -623,7 +623,8 @@ def script_compile(script):
     >>> test = ['FALSE']
     >>> parse(script_compile(test), display=False)[1] == test
     True
-    >>> test = ['DUP', 'HASH160', b'\xa0' * 20, 'EQUALVERIFY', 'CHECKSIG']
+    >>> key = (b'\xa0' * 20)
+    >>> test = ['DUP', 'HASH160', key, 'EQUALVERIFY', 'CHECKSIG']
     >>> logging.debug('test: %s', test)
     >>> compiled = script_compile(test)
     >>> logging.debug('compiled: %r', compiled)
@@ -637,12 +638,6 @@ def script_compile(script):
         if word in LOOKUP:
             compiled += bytes([LOOKUP[word]])
             continue
-        elif type(word) == str:
-            try:
-                word = a2b_hex(word)
-            except TypeError:
-                logging.warning('%r is not hex, assuming already bytes', word)
-                pass
         elif type(word) == int:
             if word in [0, 1, -1]:  # there's a word for that
                 compiled += script_compile([['FALSE', 'TRUE', '-1'][word]])
@@ -657,6 +652,13 @@ def script_compile(script):
             else:  # let's not bother with 3-byte representations
                 word = bytes(struct.pack(
                     '<L', word | [0, 0x80000000][word < 0]))
+        elif type(word) != type(b''):
+            logging.debug('trying to convert %s to bytes', word)
+            try:
+                word = a2b_hex(word)
+            except TypeError:
+                logging.warning('%r is not hex, assuming already bytes', word)
+                pass
         # by now, word is assumed to be a bytestring
         if len(word) <= 75:
             compiled += bytes([len(word)]) + bytes(word)

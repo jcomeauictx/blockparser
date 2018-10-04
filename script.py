@@ -670,7 +670,7 @@ def script_compile(script):
             compiled += bytes(b'\x4e' + struct.pack('<L', len(word)) + word)
     return compiled
 
-def parse(scriptbinary, display=True):
+def parse(scriptbinary, display=True, script_is_hex=False):
     '''
     breaks down binary script into something readable (to a FORTHer)
 
@@ -680,7 +680,8 @@ def parse(scriptbinary, display=True):
     kwargs = {}
     opcodes = dict(SCRIPT_OPS)
     #logging.debug('opcodes: %s', opcodes)
-    kwargs['script'] = script = bytevalues(scriptbinary)
+    binary = a2b_hex(scriptbinary.encode()) if script_is_hex else scriptbinary
+    kwargs['script'] = script = bytevalues(binary)
     parsed = [None] * len(script)
     while script:
         parsed[-len(script)] = script[0]

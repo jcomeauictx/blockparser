@@ -49,4 +49,6 @@ clean:
 	python3 -m doctest $<
 	python -m doctest $<
 doctests: script.doctest blockparse.doctest
+%.parse:  # parse a compiled script
+	python3 script.py parse $* '' True
 -include .deps/*

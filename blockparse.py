@@ -323,6 +323,7 @@ def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     blockfiles = blockfiles or DEFAULT
     blocks = nextblock(blockfiles, minblock, maxblock)
     for height, header, transactions in blocks:
+        logging.debug('block header from next_transaction: %s', header)
         rawcount, count, data = get_count(transactions)
         for index in range(count):
             raw_transaction, transaction, data = parse_transaction(data)
@@ -545,6 +546,12 @@ def get_count(data):
     raw_count, data = data[:offset + length], data[offset + length:]
     logging.debug('length of data after get_count: %d', len(data))
     return raw_count, count, data
+
+def coins(transaction_amount):
+    '''
+    unpack satoshis quadword and divide by 100000000 to get fractional coins
+    '''
+    return struct.unpack('<Q', transaction_amount)[0] / 100000000
 
 def varint_length(data):
     r'''

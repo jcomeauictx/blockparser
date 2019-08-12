@@ -1817,6 +1817,7 @@ def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
 
     otherwise runs a "silent" search of blockfiles and adds it to the cache
     '''
+    cache = cache or {}
     if search_hash in cache:
         logging.debug('cache hit: %s', search_hash)
         return cache[search_hash]

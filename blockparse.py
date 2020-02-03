@@ -13,9 +13,10 @@ it won't work the same but has the same general purpose, to present block
 files in a readable format.
 '''
 from __future__ import division, print_function
-import sys, os, struct, binascii, logging, hashlib, re, time
+import sys, os, struct, binascii, logging, hashlib, re, time, pprint
 from datetime import datetime
 from glob import glob
+from collections import defaultdict
 # some Python3 to Python2 mappings
 if bytes([65]) != b'A':  # python2
     class bytes(str):
@@ -27,6 +28,8 @@ if bytes([65]) != b'A':  # python2
                 return super(bytes, cls).__new__(cls, initial)
         def __repr__(self):
             return 'b' + super(bytes, self).__repr__()
+        def __getitem__(self, index):
+            return ord(super(bytes, self).__getitem__(index))
         __str__ = __repr__
     bytevalue = lambda byte: ord(byte)
     bytevalues = lambda string: map(ord, string)
@@ -41,13 +44,14 @@ LOGLEVEL = getattr(logging, os.getenv('LOGLEVEL', 'INFO'))
 logging.getLogger().level=logging.DEBUG if __debug__ else LOGLEVEL
 DEFAULT = sorted(glob(os.path.expanduser('~/.bitcoin/blocks/blk*.dat')))
 MAGIC = {
-    'bitcoin': binascii.a2b_hex('F9BEB4D9'),
-    'dogecoin': binascii.a2b_hex('C0C0C0C0'),
-    'testnet': binascii.a2b_hex('FABFB5DA'),
-    'testnet3': binascii.a2b_hex('0B110907'),
-    'namecoin': binascii.a2b_hex('F9BEB4FE'),
-    'americancoin': binascii.a2b_hex('414D433A'),
+    'bitcoin': binascii.a2b_hex(b'F9BEB4D9'),
+    'dogecoin': binascii.a2b_hex(b'C0C0C0C0'),
+    'testnet': binascii.a2b_hex(b'FABFB5DA'),
+    'testnet3': binascii.a2b_hex(b'0B110907'),
+    'namecoin': binascii.a2b_hex(b'F9BEB4FE'),
+    'americancoin': binascii.a2b_hex(b'414D433A'),
 }
+MAGIC.update([[value, key] for key, value in MAGIC.items()])
 VARINT = {
     # struct format, offset, length
     # remember in Python3 b'\xfd'[0] == 253
@@ -67,6 +71,19 @@ UNPACKER = {
 }
 
 NULLBLOCK = b'\0' * 32  # pointed to by genesis block
+PREFIX_LENGTH = 8  # block prefix
+HEADER_LENGTH = 80  # block header
+CONFIRMATIONS = 6  # confirmations before we count a block in blockchain
+RAWBLOCKS = []  # storage for blocks in file order
+BLOCKS = []  # storage for blocks in blockchain order
+BLOCKCHAIN = {}  # blocks indexed by hash
+NEXTBLOCK = defaultdict(list)  # blocks indexed by previous hash
+CHAINS = {}  # main and orphan chains
+STATE = {
+    'phase': 'pre-initialization',
+}
+COMMAND = os.path.splitext(os.path.split(sys.argv[0])[1])[0]
+BLOCKFILES = [sys.argv[1]] if len(sys.argv) > 1 and sys.argv[1] else DEFAULT
 
 def nextprefix(openfile):
     '''
@@ -74,50 +91,202 @@ def nextprefix(openfile):
 
     tries to read block prefix from an open file
     '''
+    offset = openfile.tell()
+    prefix = openfile.read(PREFIX_LENGTH)
     try:
-        prefix = openfile.read(8)
-    except AttributeError:  # openfile is None
-        prefix = b''
-    return prefix
+        blocksize = struct.unpack('<L', prefix[4:])[0]
+    except struct.error:
+        blocksize = 0
+    blocktype = MAGIC.get(prefix[:4], 'unknown')
+    return prefix, blocktype, blocksize, offset
 
 def nextchunk(blockfiles=None, minblock=0, maxblock=sys.maxsize, wait=True):
     '''
     generator that fetches and returns raw blocks out of blockfiles
 
     with defaults, waits forever until terminated by signal
+    NOTE: block "height" here refers only to relative position in files
+
+    NOTE: block files may be prefilled with zeroes. a prefix of all zeroes
+    should be treated the same as a failed read.
+
+    if an attempted read returns b'', it could mean 2 things:
+    (1) that file has been closed, and a new one is being opened for output
+    (2) that file is still open for more blocks
     '''
     minheight, maxheight = int(minblock), int(maxblock)
     height = 0
-    reversemagic = dict([[value, key] for key, value in MAGIC.items()])
     blockfiles = blockfiles or DEFAULT
     fileindex = 0
+    offset = None  # into current blockfile
     currentfile = None
     done = False
-    while True:
-        prefix = nextprefix(currentfile)
+    while height <= maxheight:
+        if currentfile is None or currentfile.closed:
+            currentfile = open(blockfiles[fileindex], 'rb')
+        prefix, blocktype, blocksize, offset = nextprefix(currentfile)
+        logging.debug('prefix at offset 0x%x: %r', offset, prefix)
         if prefix == b'':
-            try:
-                newfile = open(blockfiles[fileindex], 'rb')
-                fileindex += 1
-                if fileindex == len(blockfiles):
-                    blockfiles.append(nextfile(blockfiles[-1]))
-                currentfile = newfile
-            except FileNotFoundError:
-                if not wait:
-                    logging.info('end of current data, not waiting')
-                    done = True
-                else:
-                    logging.debug('waiting for %s to come online',
-                                  blockfiles[fileindex])
-                    time.sleep(10)
+            if fileindex == len(blockfiles) - 1:  # on last known file
+                nextblockfile = nextfile(blockfiles[-1])
+                if os.path.exists(nextblockfile):
+                    blockfiles.append(nextblockfile)
+                    fileindex += 1
+                    currentfile.close()
                     continue
+            else:
+                fileindex += 1
+                currentfile.close()
+                continue
+            STATE['phase'] = 'serving'
+            if not wait:
+                logging.info('end of current data, not waiting')
+                done = True
+            else:
+                logging.debug('waiting for %s to come online',
+                              blockfiles[fileindex])
+                time.sleep(10)
+                # following 3 lines probably not necessary, but since we're
+                # in a delay loop anyway, can't really hurt either.
+                currentfile.close()
+                currentfile = open(currentfile.name, 'rb')
+                currentfile.seek(offset)
+                continue
+            if done:
+                raise StopIteration('No more blocks at this time')
+        elif not any(bytes(prefix)):  # all zeroes
+            STATE['phase'] = 'serving'
+            if not wait:
+                logging.info('end of current data, not waiting')
+                done = True
+            else:
+                logging.debug('waiting for %s to obtain next block',
+                              blockfiles[fileindex])
+                time.sleep(10)
+                # close and reopen to see new content
+                # why necessary? don't know. maybe bitcoind doesn't flush()
+                currentfile.close()
+                currentfile = open(currentfile.name, 'rb')
+                currentfile.seek(offset)
+                continue
             if done:
                 raise StopIteration('No more blocks at this time')
         else:
-            magic = prefix[:4]
-            blocksize = struct.unpack('<L', prefix[4:])[0]
-            logging.debug('yielding block of size %d', blocksize)
-            yield prefix + currentfile.read(blocksize)
+            logging.debug('block of size 0x%x at height %d', blocksize, height)
+            if minheight <= height <= maxheight:
+                blockdata = currentfile.read(blocksize)
+                blockheader = blockdata[:HEADER_LENGTH]
+                yield {
+                    'rawblock': prefix + blockdata,
+                    'rawheight': height,
+                    'file': blockfiles[fileindex],
+                    'offset': offset,
+                    'length': blocksize + PREFIX_LENGTH,
+                    'currency': blocktype,
+                }
+            elif height > maxheight:
+                raise StopIteration('Returned all requested blocks')
+            else:
+                logging.debug('discarding block at height %d', height)
+                currentfile.seek(blocksize, os.SEEK_CUR)
+            height += 1
+
+def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize, wait=True):
+    '''
+    return confirmed blocks in blockchain order
+
+    uses globals BLOCKCHAIN and CHAINS
+    '''
+    blockfiles = blockfiles or DEFAULT
+    chunks = nextchunk(blockfiles, minblock, maxblock, wait)
+    previous_hash = show_hash(NULLBLOCK)
+    last = -1  # last block returned
+    # initialize BLOCKCHAIN and CHAINS globals
+    BLOCKCHAIN[previous_hash] = {'children': [], 'hash': previous_hash}
+    CHAINS.update(BLOCKCHAIN)  # all chains including main chain
+    blocks = []  # main chain, in order
+    for chunk in chunks:
+        rawblock = chunk.pop('rawblock')[PREFIX_LENGTH:]
+        block = blockheader(rawblock)
+        block.update(chunk)
+        block['children'] = []
+        BLOCKCHAIN[block['hash']] = block
+        changed = False
+        if block['previous'] in BLOCKCHAIN:
+            connect(block, BLOCKCHAIN)
+            changed = True
+        else:
+            logging.debug('orphan block %s found', block['hash'])
+            CHAINS[block['hash']] = block
+        logging.debug('blocks found so far: %d', len(BLOCKCHAIN) - 1)
+        logging.debug('chains found so far: %d', len(CHAINS))
+        # consolidate chains
+        for key in list(CHAINS):
+            if key == show_hash(NULLBLOCK):
+                continue
+            elif CHAINS[key]['previous'] in BLOCKCHAIN:
+                logging.debug('connecting previously orphan block %s',
+                              CHAINS[key]['hash'])
+                connect(CHAINS.pop(key), BLOCKCHAIN)
+                changed = True
+        logging.debug('chains after consolidation: %d', len(CHAINS))
+        if changed:
+            BLOCKS[:] = listchain(CHAINS[show_hash(NULLBLOCK)], BLOCKCHAIN)
+            logging.debug('main chain length: %s', len(BLOCKS))
+            # when chain has 7 blocks, block 0 has 6 confirmations
+            available = len(BLOCKS) - CONFIRMATIONS - 1
+            while available >= 0 and last < available:
+                last += 1
+                yield BLOCKS[last]
+
+def listchain(root, blockchain):
+    '''
+    return blockchain as list after integrity check
+    '''
+    block = root
+    # don't include fake null block in main chain
+    blocks = [block] if 'previous' in block else []
+    while block and len(block['children']):
+        if blockchain[block['children'][0]]['previous'] == block['hash']:
+            block = blockchain[block['children'][0]]
+            blocks.append(block)
+        else:
+            raise ValueError('Broken chain at block %s' % block)
+    return blocks
+
+def connect(block, blocks):
+    '''
+    hook this block into an existing chain
+    '''
+    previous = blocks[block['previous']]
+    if block['hash'] in previous['children']:
+        logging.warning('duplicate block %s', block['hash'])
+        previous['children'].remove(block['hash'])
+    logging.debug('inserting block %s into %s', block, previous)
+    previous['children'].insert(0, block['hash'])
+    if len(previous['children']) > 1:
+        logging.warning('block %s replaced %s',
+                        previous['children'][0],
+                        previous['children'][1])
+
+def serve(blockfiles=None, minblock=0, maxblock=sys.maxsize, wait=True):
+    '''
+    first index all blocks, then run as a server, returning requested data
+    '''
+    blockfiles = blockfiles or DEFAULT
+    logging.debug('serve: blockfiles: %s', blockfiles)
+    blocks = nextblock(blockfiles, minblock, maxblock, wait)
+    previous_hash = show_hash(NULLBLOCK)
+    STATE['phase'] = 'indexing'
+    for block in blocks:
+        logging.info('block: %s', block)
+
+def explorer(environ, start_response):
+    '''
+    implement a uWSGI block explorer
+    '''
+    start_response('200 gotcha', [('Content-type', 'text/plain')])
+    return [('BLOCKS length now: %s' % len(BLOCKS)).encode('utf8')]
 
 def nextfile(filename):
     '''
@@ -126,7 +295,7 @@ def nextfile(filename):
     >>> nextfile('blk0001.dat')
     'blk0002.dat'
     >>> try: nextfile('blk.dat')
-    ... except: pass
+    ... except ValueError: pass
     >>> nextfile('00041')
     '00042'
     '''
@@ -142,13 +311,31 @@ def nextfile(filename):
     filename = match['prefix'] + newnumber + match['suffix']
     return os.path.join(directory, filename) if directory else filename
 
-def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+def catchup():
+    '''
+    try to catch up BLOCKS to RAWBLOCKS
+    '''
+    logging.debug('len(RAWBLOCKS): %d, len(BLOCKS): %d', len(RAWBLOCKS),
+                  len(BLOCKS))
+    for attempt in range(len(RAWBLOCKS) - len(BLOCKS)):
+        block = BLOCKS[-1]
+        previous_hash = block['hash']
+        if previous_hash in NEXTBLOCK:
+            following = NEXTBLOCK[previous_hash][0]
+            logging.debug('appending block %s to BLOCKS', following['hash'])
+            BLOCKS.append(following)
+            previous_hash = following['hash']
+        else:
+            logging.debug('cannot find hash %s in NEXTBLOCK', previous_hash)
+            break
+    return previous_hash
+
+def oldnextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     '''
     generator that fetches and returns raw blocks out of blockfiles
     '''
     minheight, maxheight = int(minblock), int(maxblock)
     height = 0
-    reversemagic = dict([[value, key] for key, value in MAGIC.items()])
     blockfiles = blockfiles or DEFAULT
     for blockfile in blockfiles:
         magic = ''
@@ -170,15 +357,15 @@ def nextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             if minheight <= height <= maxheight:
                 logging.debug('height: %d', height)
                 logging.debug('magic: %s', binascii.b2a_hex(magic))
-                logging.debug('block type: %s', reversemagic.get(
-                             magic, 'unknown'))
+                logging.debug('block type: %s', MAGIC.get(magic, 'unknown'))
                 logging.debug('block size: %d', blocksize)
-                logging.debug('block header: %r', blockheader)
+                logging.debug('block hash: %s',
+                              show_hash(get_hash(blockheader)))
                 logging.debug('transactions (partial): %r', transactions[:80])
                 yield (height, blockheader, transactions)
             elif height > maxheight:
                 logging.debug('height %d > maxheight %d', height, maxheight)
-                break  # still executes `height += 1` below!
+                break
             else:
                 logging.debug('height: %d', height)
             height += 1
@@ -193,7 +380,6 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     minheight, maxheight = int(minblock), int(maxblock)
     logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
     height = 0
-    reversemagic = dict([[value, key] for key, value in MAGIC.items()])
     blockfiles = blockfiles or DEFAULT
     # if file was specified on commandline, make it into a list
     for blockfile in blockfiles:
@@ -209,14 +395,14 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                           index, len(blockdata))
             magic = blockdata[index:index + 4]
             blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
+            logging.debug('size of block %s: %s', height, blocksize)
             blockheader = blockdata[index + 8:index + 88]
             transactions = blockdata[index + 88:index + blocksize + 8]
             index += blocksize + 8
             if minheight <= height <= maxheight:
                 logging.info('height: %d', height)
                 logging.debug('magic: %s', binascii.b2a_hex(magic))
-                logging.info('block type: %s', reversemagic.get(
-                             magic, 'unknown'))
+                logging.info('block type: %s', MAGIC.get(magic, 'unknown'))
                 logging.info('block size: %d', blocksize)
                 logging.info('block header: %r', blockheader)
                 parse_blockheader(blockheader)
@@ -226,13 +412,28 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
                 logging.debug('remaining data (partial): %r', data[:80])
             elif height > maxheight:
                 logging.debug('height %d > maxheight %d', height, maxheight)
-                break  # still executes `height += 1` below!
+                break
             else:
                 logging.debug('height: %d', height)
             height += 1
         logging.debug('height: %d, maxheight: %d', height, maxheight)
         if height > maxheight:
             break
+
+def blockheader(block):
+    '''
+    return contents of block header as dict
+    '''
+    header = {}
+    header['version'] = to_hex(block[:4])
+    header['previous'] = show_hash(block[4:36])  # hash of previous block
+    header['merkle_root'] = show_hash(block[36:68])
+    header['unix_time'] = timestamp(block[68:72])
+    header['nbits'] = to_hex(block[72:76])
+    header['nonce'] = to_hex(block[76:80])
+    header['hash'] = show_hash(get_hash(block[:80]))
+    logging.debug('header: %s', header)
+    return header
 
 def parse_blockheader(blockheader):
     '''
@@ -285,7 +486,7 @@ def to_hex(bytestring):
     to_hex('\x01\xff')
     'ff01'
     '''
-    logging.debug('to_hex bytestring: %r', bytestring)
+    #logging.debug('to_hex bytestring: %r', bytestring)
     return str(binascii.b2a_hex(bytestring).decode('utf8'))
 
 def get_hash(bytestring, repeat=2):
@@ -315,124 +516,32 @@ def parse_transactions(data):
         transactions.append(raw_transaction)
     return count, data
 
-def next_transaction(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+def get_transactions(block):
+    '''
+    read in block and return the raw transaction data
+    '''
+    with open(block['file'], 'rb') as infile:
+        infile.seek(block['offset'] + HEADER_LENGTH + PREFIX_LENGTH)
+        data = infile.read(block['length'] - HEADER_LENGTH - PREFIX_LENGTH)
+        return data
+
+def next_transaction(blockfiles=None, minblock=0,
+        maxblock=sys.maxsize, wait=True):
     '''
     iterates over each transaction in every input block
     '''
     logging.debug('blockfiles: %s', blockfiles)
     blockfiles = blockfiles or DEFAULT
-    blocks = nextblock(blockfiles, minblock, maxblock)
-    for height, header, transactions in blocks:
+    blocks = nextblock(blockfiles, minblock, maxblock, wait)
+    for block in blocks:
+        transactions = get_transactions(block)
         rawcount, count, data = get_count(transactions)
+        logging.debug('transaction count for block %s: %s',
+                      block['rawheight'], count)
         for index in range(count):
             raw_transaction, transaction, data = parse_transaction(data)
             txhash = get_hash(raw_transaction)
-            yield height, txhash, transaction
-
-class Node(object):
-    '''
-    tree node
-    '''
-    def __init__(self, parent=None, blockhash=None, blocktime=''):
-        self.parent = parent
-        self.blockhash = blockhash
-        self.blocktime = blocktime
-
-    def countback(self, searchblock=NULLBLOCK):
-        r'''
-        return list of nodes that ends with this block
-
-        if attempting to get "height", caller is responsible to zero-base
-        the result, counting the genesis block as height 0
-
-        >>> node = Node(None, NULLBLOCK)  # not a real node
-        >>> node = Node(node, b'\0')  # height 0, genesis block
-        >>> node = Node(node, b'\1')  # height 1
-        >>> node = Node(node, b'\2')  # height 2
-        >>> len(node.countback())
-        3
-        >>> len(node.countback(b'\0'))
-        2
-        >>> try:
-        ...  node.countback(None)
-        ... except AttributeError:
-        ...  print('failed')
-        failed
-        '''
-        traversed = [self]
-        parent = self.parent
-        while parent.blockhash != searchblock:
-            #logging.debug('parent.blockhash: %s', show_hash(parent.blockhash))
-            traversed.insert(0, parent)
-            parent = parent.parent
-        return traversed
-
-    def __str__(self):
-        return "{'Node': {'hash': '%s', 'timestamp': '%s'}}" % (
-            show_hash(self.blockhash),
-            self.blocktime)
-    __repr__ = __str__
-
-def reorder(blockfiles=None, minblock=0, maxblock=sys.maxsize):
-    '''
-    removes orphan blocks and corrects height
-    '''
-    logging.debug('blockfiles: %s', blockfiles)
-    blockfiles = blockfiles or DEFAULT
-    blocks = nextblock(blockfiles, minblock, maxblock)
-    lastnode = Node(None, NULLBLOCK)
-    chains = [[lastnode]]
-    logging.debug('chains: %s', chains)
-    chain = 0
-    for height, header, transactions in blocks:
-        parsed = parse_blockheader(header)
-        previous, blockhash = parsed[1], parsed[6]
-        blocktime = timestamp(parsed[3])
-        if previous != lastnode.blockhash:
-            logging.warning('reorder at block %s',
-                            Node(None, blockhash, blocktime))
-            logging.debug('previous block should be: %s', show_hash(previous))
-            logging.info('lastnode: %s', lastnode)
-            found, count = None, 0
-            try:
-                logging.debug('assuming previous block in this same chain')
-                nodes = lastnode.countback(previous)
-                found = nodes[0].parent
-                logging.info('reorder found %s %d blocks back',
-                              found, len(nodes) + 1)
-                chain = len(chains)
-                chains.append([])
-            except AttributeError:
-                logging.debug('searching other chains')
-                for chain in reversed(chains):
-                    node = chain[-1]
-                    if node.blockhash == previous:
-                        logging.info('reorder found %s at end of another chain',
-                                      found)
-                        found = node
-                        chain = chains.index(chain)
-                for chain in reversed(chains):
-                    found = ([node for node in chain
-                              if node.blockhash == previous] + [None])[0]
-                    if found is not None:
-                        logging.info('reorder found %s in another chain',
-                                      found)
-                        chain = len(chains)
-                        chains.append([])
-                        break
-            if found is None:
-                raise ValueError('Previous block %s not found', previous)
-            else:
-                lastnode = found
-                # sanity check on above programming
-                assert_true(previous == lastnode.blockhash)
-        node = Node(lastnode, blockhash, blocktime)
-        chains[chain].append(node)
-        logging.info('current chain: %d out of %d', chain, len(chains))
-        lastnode = node
-    nodes = chains[chain][-1].countback()
-    logging.info('final [real] height: %d out of %d', len(nodes) - 1, height)
-    print(nodes)
+            yield block['rawheight'], txhash, transaction
 
 def parse_transaction(data):
     '''
@@ -546,6 +655,12 @@ def get_count(data):
     logging.debug('length of data after get_count: %d', len(data))
     return raw_count, count, data
 
+def coins(transaction_amount):
+    '''
+    unpack satoshis quadword and divide by 100000000 to get fractional coins
+    '''
+    return struct.unpack('<Q', transaction_amount)[0] / 100000000
+
 def varint_length(data):
     r'''
     create new VarInt count of raw data
@@ -576,6 +691,20 @@ except AssertionError:
 
 if __name__ == '__main__':
     blockparse = parse
-    COMMAND = os.path.splitext(os.path.split(sys.argv[0])[1])[0]
-    BLOCKFILES = [sys.argv[1]] if len(sys.argv) > 1 else DEFAULT
-    eval(COMMAND)(BLOCKFILES, *sys.argv[2:])
+    logging.debug('calling %s with args %s', COMMAND, sys.argv[1:])
+    try:
+        eval(COMMAND)(BLOCKFILES, *sys.argv[2:])
+    except KeyboardInterrupt:
+        logging.error('KeyboardInterrupt, please wait for globals()...')
+        pprint.pprint(globals(), stream=sys.stderr)
+elif sys.argv and sys.argv[0] == 'uwsgi':
+    logging.warning('args: %r', sys.argv)
+    import uwsgi, threading
+    logging.debug('uwsgi.opt: %s' % repr(uwsgi.opt))
+    SERVER = threading.Thread(
+        target=serve, name='server', args=(BLOCKFILES, *sys.argv[2:]))
+    SERVER.daemon = True
+    SERVER.start()
+else:
+    logging.error('nothing more for %s to do on import, args: %r',
+                  __name__, sys.argv)

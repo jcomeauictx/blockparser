@@ -623,7 +623,8 @@ def script_compile(script):
     >>> test = ['FALSE']
     >>> parse(script_compile(test), display=False)[1] == test
     True
-    >>> test = ['DUP', 'HASH160', b'\xa0' * 20, 'EQUALVERIFY', 'CHECKSIG']
+    >>> key = (b'\xa0' * 20)
+    >>> test = ['DUP', 'HASH160', key, 'EQUALVERIFY', 'CHECKSIG']
     >>> logging.debug('test: %s', test)
     >>> compiled = script_compile(test)
     >>> logging.debug('compiled: %r', compiled)
@@ -637,12 +638,6 @@ def script_compile(script):
         if word in LOOKUP:
             compiled += bytes([LOOKUP[word]])
             continue
-        elif type(word) == str:
-            try:
-                word = a2b_hex(word)
-            except TypeError:
-                logging.warning('%r is not hex, assuming already bytes', word)
-                pass
         elif type(word) == int:
             if word in [0, 1, -1]:  # there's a word for that
                 compiled += script_compile([['FALSE', 'TRUE', '-1'][word]])
@@ -657,6 +652,13 @@ def script_compile(script):
             else:  # let's not bother with 3-byte representations
                 word = bytes(struct.pack(
                     '<L', word | [0, 0x80000000][word < 0]))
+        elif type(word) != type(b''):
+            logging.debug('trying to convert %s to bytes', word)
+            try:
+                word = a2b_hex(word.encode())
+            except TypeError:
+                logging.warning('%r is not hex, assuming already bytes', word)
+                pass
         # by now, word is assumed to be a bytestring
         if len(word) <= 75:
             compiled += bytes([len(word)]) + bytes(word)
@@ -668,7 +670,7 @@ def script_compile(script):
             compiled += bytes(b'\x4e' + struct.pack('<L', len(word)) + word)
     return compiled
 
-def parse(scriptbinary, display=True):
+def parse(scriptbinary, display=True, script_is_hex=False):
     '''
     breaks down binary script into something readable (to a FORTHer)
 
@@ -678,7 +680,8 @@ def parse(scriptbinary, display=True):
     kwargs = {}
     opcodes = dict(SCRIPT_OPS)
     #logging.debug('opcodes: %s', opcodes)
-    kwargs['script'] = script = bytevalues(scriptbinary)
+    binary = a2b_hex(scriptbinary.encode()) if script_is_hex else scriptbinary
+    kwargs['script'] = script = bytevalues(binary)
     parsed = [None] * len(script)
     while script:
         parsed[-len(script)] = script[0]
@@ -809,7 +812,7 @@ def hash_to_addr(hash160, padding=b'\0'):
     convert address hash to its base58 form
 
     >>> hash_to_addr(
-    ...  a2b_hex('6b146f137e7e8aa661b3515ac8856cbce061a3f2'), b'\x05')
+    ...  a2b_hex('6b146f137e7e8aa661b3515ac8856cbce061a3f2'.encode()), b'\x05')
     '3BTChqkFai51wFwrHSVdvSW9cPXifrJ7jC'
     '''
     intermediate = padding + hash160
@@ -826,7 +829,7 @@ def pubkey_to_hash(pubkey):
     >>> pubkey = ('043946a3002f7e56bad8f134f9b34282906a1ff5c54d9a60'
     ...           'd47ef691c453bf5e1706d314b474399f6dab5088cf0c9ac2'
     ...           '8543c6f13b66aef3e1ff80d5e14111f7be')
-    >>> hashed = pubkey_to_hash(a2b_hex(pubkey))
+    >>> hashed = pubkey_to_hash(a2b_hex(pubkey.encode()))
     >>> hash_to_addr(hashed)
     '1Q7f2rL2irjpvsKVys5W2cmKJYss82rNCy'
     '''
@@ -1404,7 +1407,7 @@ def op_lessthan(stack=None, **kwargs):
     '''
     stack.append(bytevector(number(stack.pop()) > number(stack.pop())))
 
-def op_greaterthen(stack=None, **kwargs):
+def op_greaterthan(stack=None, **kwargs):
     '''
     for top 2 stack items [a, b]: return 1 if a > b, else 0
 
@@ -1787,7 +1790,7 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
             if previous_hash != COINBASE:
                 logging.debug('non-coinbase transaction')
                 txout_index = struct.unpack('<L', txin[1])[0]
-                tx = silent_search(blockfiles, previous_hash, cache)
+                tx = silent_search(blockfiles, previous_hash, height, cache)
                 txout_script = tx[4][txout_index][2]
                 parsed, readable = parse(txout_script, display=False)
                 # still using stack from above txin_script
@@ -1808,19 +1811,25 @@ def testall(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     print('%d scripts executed successfully' % count)
     print('%d of those were spends' % spendcount)
 
-def silent_search(blockfiles, search_hash, cache=None, maxlength=sys.maxsize):
+def silent_search(blockfiles, search_hash, start_height,
+        cache=None, maxlength=sys.maxsize):
     '''
     returns transaction out of cache if present
 
     otherwise runs a "silent" search of blockfiles and adds it to the cache
     '''
+    cache = cache or {}
     if search_hash in cache:
         logging.debug('cache hit: %s', search_hash)
         return cache[search_hash]
     else:
         logging.debug('cache miss, searching for %s', search_hash)
+        #raise RuntimeError('cache miss for %s' % show_hash(search_hash))
         tx_search = next_transaction(blockfiles)
-        for ignored, found_hash, tx in tx_search:
+        for height, found_hash, tx in tx_search:
+            if height == start_height:
+                raise RuntimeError('Failed finding tx %s' %
+                                   show_hash(search_hash))
             logging.debug('comparing %r and %r', search_hash, found_hash)
             if search_hash == found_hash:
                 logging.debug('found previous tx: %r', tx)

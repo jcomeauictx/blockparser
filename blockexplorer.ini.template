@@ -1,0 +1,12 @@
+[uwsgi]
+http-socket = amcexplorer:2424
+plugin = python37
+wsgi-file = $PWD/blockparse.py
+callable = explorer
+chdir = %d
+uid = $USER
+pyargv = /home/$USER/.americancoin/blk0001.dat
+enable-threads
+logto = /tmp/%n.log
+# guide to "magic" variables:
+# http://uwsgi-docs.readthedocs.io/en/latest/Configuration.html

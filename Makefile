@@ -52,3 +52,5 @@ doctests: script.doctest blockparse.doctest
 %.parse:  # parse a compiled script
 	python3 script.py parse $* '' True
 -include .deps/*
+%.ini: %.ini.template
+	envsubst < $< > $@

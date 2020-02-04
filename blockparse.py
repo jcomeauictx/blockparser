@@ -702,7 +702,9 @@ elif sys.argv and sys.argv[0] == 'uwsgi':
     import uwsgi, threading
     logging.debug('uwsgi.opt: %s' % repr(uwsgi.opt))
     SERVER = threading.Thread(
-        target=serve, name='server', args=(BLOCKFILES, *sys.argv[2:]))
+        target=serve,
+        name='server',
+        args=(BLOCKFILES,) + tuple(*sys.argv[2:]))
     SERVER.daemon = True
     SERVER.start()
 else:

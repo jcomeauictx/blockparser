@@ -385,12 +385,14 @@ def blockparse(blockfiles=None, minblock=0, maxblock=sys.maxsize, wait=False):
     logging.warning('NOTE: "height" values shown are relative'
                     ' to start of first file and may include'
                     ' orphaned blocks')
+    print('height', 'hash', 'previous')
     for chunk in chunks:
         rawblock = chunk.pop('rawblock')[PREFIX_LENGTH:]
         block = blockheader(rawblock)
         block.update(chunk)
         if minheight <= height <= maxheight:
             logging.debug('block: %s', block)
+            print(height, block['hash'], block['previous'])
         elif height > maxheight:
             logging.debug('height %d > maxheight %d', height, maxheight)
             break

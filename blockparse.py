@@ -373,7 +373,7 @@ def oldnextblock(blockfiles=None, minblock=0, maxblock=sys.maxsize):
         if height > maxheight:
             break
 
-def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
+def blockparse(blockfiles=None, minblock=0, maxblock=sys.maxsize, wait=False):
     '''
     dump out block files
     '''
@@ -381,44 +381,22 @@ def parse(blockfiles=None, minblock=0, maxblock=sys.maxsize):
     logging.debug('minheight: %d, maxheight: %d', minheight, maxheight)
     height = 0
     blockfiles = blockfiles or DEFAULT
-    # if file was specified on commandline, make it into a list
-    for blockfile in blockfiles:
-        magic = ''
-        index = 0
-        with open(blockfile, 'rb') as datainput:
-            blockdata = datainput.read()  # not necessarily very efficient
-        logging.warning('NOTE: "height" values shown are relative'
-                        ' to start of first file and may include'
-                        ' orphaned blocks')
-        while index < len(blockdata):
-            logging.debug('blockparser at index %d out of %d bytes',
-                          index, len(blockdata))
-            magic = blockdata[index:index + 4]
-            blocksize = struct.unpack('<L', blockdata[index + 4:index + 8])[0]
-            logging.debug('size of block %s: %s', height, blocksize)
-            blockheader = blockdata[index + 8:index + 88]
-            transactions = blockdata[index + 88:index + blocksize + 8]
-            index += blocksize + 8
-            if minheight <= height <= maxheight:
-                logging.info('height: %d', height)
-                logging.debug('magic: %s', binascii.b2a_hex(magic))
-                logging.info('block type: %s', MAGIC.get(magic, 'unknown'))
-                logging.info('block size: %d', blocksize)
-                logging.info('block header: %r', blockheader)
-                parse_blockheader(blockheader)
-                logging.info('transactions (partial): %r', transactions[:80])
-                count, data = parse_transactions(transactions)
-                logging.info('transaction count: %d', count)
-                logging.debug('remaining data (partial): %r', data[:80])
-            elif height > maxheight:
-                logging.debug('height %d > maxheight %d', height, maxheight)
-                break
-            else:
-                logging.debug('height: %d', height)
-            height += 1
-        logging.debug('height: %d, maxheight: %d', height, maxheight)
-        if height > maxheight:
+    chunks = nextchunk(blockfiles, minblock, maxblock, wait)
+    logging.warning('NOTE: "height" values shown are relative'
+                    ' to start of first file and may include'
+                    ' orphaned blocks')
+    for chunk in chunks:
+        rawblock = chunk.pop('rawblock')[PREFIX_LENGTH:]
+        block = blockheader(rawblock)
+        block.update(chunk)
+        if minheight <= height <= maxheight:
+            logging.debug('block: %s', block)
+        elif height > maxheight:
+            logging.debug('height %d > maxheight %d', height, maxheight)
             break
+        else:
+            logging.debug('height: %d', height)
+        height += 1
 
 def blockheader(block):
     '''
@@ -690,7 +668,6 @@ except AssertionError:
         assert(statement)
 
 if __name__ == '__main__':
-    blockparse = parse
     logging.debug('calling %s with args %s', COMMAND, sys.argv[1:])
     try:
         eval(COMMAND)(BLOCKFILES, *sys.argv[2:])

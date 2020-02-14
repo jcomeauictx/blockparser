@@ -54,3 +54,6 @@ doctests: script.doctest blockparse.doctest
 -include .deps/*
 %.ini: %.ini.template
 	envsubst < $< > $@
+serve: blockexplorer.ini
+	uwsgi --ini $< || echo If it failed due to a missing file, you may \
+	 need to: sudo apt-get install uwsgi-plugin-python3
